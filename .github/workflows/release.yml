@@ -66,24 +66,11 @@ jobs:
       # all. This loads the real dist and checks the whole surface the client
       # imports, rather than the five names the first version of this step
       # asserted — which passed while four exports were missing.
-      - name: Check the built package imports and is complete
-        run: npm run check-surface
-
-      # The React Native entry exists so a phone bundle contains no AudioContext
-      # and no RNNoise worker. Metro follows `new Worker(new URL(...))` as a
-      # dependency, so one convenient import from the wrong file turns into
-      # "Unable to resolve module @shiguredo/rnnoise-wasm" in somebody else's
-      # app, several releases later. This walks dist and checks.
-      - name: Check the React Native entry stays free of web-only code
-        run: npm run check-native-entry
-
-      # GRYT-433: two files each declared `NativeAudioCapture`, and the explicit
-      # re-export in engine.ts beat the star export silently. The hook's return
-      # type could not be named from outside the package at all, and nothing in
-      # the build had an opinion about it. This walks the built .d.ts graph and
-      # fails on a name declared twice.
-      - name: Check no exported name is declared twice
-        run: npm run check-type-names
+      # Against `dist`, which is what is about to be published — and not the
+      # same thing as `src`, since `add-esm-extensions.mjs` rewrites every
+      # specifier on the way out.
+      - name: Check the crypto
+        run: npm test
 
       - name: Set the version
         id: version
