@@ -1,0 +1,40 @@
+{
+  "name": "@gryt/crypto",
+  "version": "0.1.0",
+  "description": "Message encryption for Gryt: key derivation, key bindings, sealed envelopes, pinning and comparison codes. Shared by the desktop client and the mobile app.",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Gryt-chat/crypto.git"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/add-esm-extensions.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "for f in scripts/check-*.mjs; do node \"$f\" || exit 1; done",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^2",
+    "@noble/curves": "^2.3.0",
+    "@noble/hashes": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.33",
+    "typescript": "^5.9.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

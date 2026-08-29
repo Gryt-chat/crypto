@@ -1,0 +1,26 @@
+{
+  // Deliberately matched to the client's tsconfig.app.json rather than set to
+  // this package's own taste. The client still holds its own copy of every file
+  // here until the migration finishes, and a stricter config would mean editing
+  // the copies as they land — so they would stop being comparable exactly when
+  // being able to diff them matters most.
+  //
+  // Tighten this once the client is consuming the package and its copies are
+  // deleted.
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"]
+}
