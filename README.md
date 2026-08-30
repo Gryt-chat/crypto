@@ -20,8 +20,8 @@ either way.
 - **`conversation-encryption`** — every member has a usable key, or nobody gets
   it sealed.
 - **`comparison-code`** — sixty digits two people read to each other.
-- **`attachments`** — a key per file, bound to its id, with the key inside the
-  sealed message.
+- **`attachments`** — a key per file, bound so one file’s bytes cannot be served
+  as another’s, with the key inside the sealed message.
 
 ## Importing it
 

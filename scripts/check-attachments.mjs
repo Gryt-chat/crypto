@@ -57,7 +57,6 @@ const read = (sealed, person, conversation = CONVERSATION) =>
   const { ciphertext, meta } = sealAttachment({
     bytes: FILE,
     conversationId: CONVERSATION,
-    fileId: "file_1",
     name: "holiday.jpg",
     mime: "image/jpeg",
     width: 4032,
@@ -71,13 +70,14 @@ const read = (sealed, person, conversation = CONVERSATION) =>
   );
   assert.equal(ciphertext.length, FILE.length + 16, "GCM appends a 16-byte tag");
 
-  const opened = openAttachment({
-    ciphertext,
-    conversationId: CONVERSATION,
-    fileId: "file_1",
-    meta,
-  });
+  const opened = openAttachment({ ciphertext, conversationId: CONVERSATION, meta });
   assert.deepEqual(Array.from(opened), Array.from(FILE));
+
+  // Generated here rather than supplied. The server assigns the file id in the
+  // response to the upload, by which point the bytes are already encrypted and
+  // sent — so a caller could not have bound to it without choosing the server's
+  // primary key for it.
+  assert.ok(meta.id, "nothing to bind the ciphertext to");
 
   // The size is the plaintext's, so a reader can draw "2.4 MB" without
   // downloading anything.
@@ -91,11 +91,12 @@ const read = (sealed, person, conversation = CONVERSATION) =>
 /* ── two files never share a key ─────────────────────────────────────────── */
 
 {
-  const a = sealAttachment({ bytes: FILE, conversationId: CONVERSATION, fileId: "a" });
-  const b = sealAttachment({ bytes: FILE, conversationId: CONVERSATION, fileId: "b" });
+  const a = sealAttachment({ bytes: FILE, conversationId: CONVERSATION });
+  const b = sealAttachment({ bytes: FILE, conversationId: CONVERSATION });
 
   assert.notEqual(a.meta.key, b.meta.key, "a key per file, not one per sender");
   assert.notEqual(a.meta.iv, b.meta.iv);
+  assert.notEqual(a.meta.id, b.meta.id, "two files bound to the same value swap freely");
   // Same bytes, same length, different ciphertext. Identical output would mean
   // a server could tell two people sent the same file.
   assert.notDeepEqual(Array.from(a.ciphertext), Array.from(b.ciphertext));
@@ -104,35 +105,43 @@ const read = (sealed, person, conversation = CONVERSATION) =>
 /* ── bytes served back under another id do not open ──────────────────────── */
 
 {
-  const { ciphertext, meta } = sealAttachment({
-    bytes: FILE,
-    conversationId: CONVERSATION,
-    fileId: "file_1",
-  });
+  const first = sealAttachment({ bytes: FILE, conversationId: CONVERSATION });
+  const second = sealAttachment({ bytes: FILE, conversationId: CONVERSATION });
 
   // The case this exists for: a server that swaps two uploads hands a reader a
   // file that decrypts perfectly and is the wrong one, and the reader never saw
-  // the original. Binding the id means it fails instead.
+  // the original. The binding means it fails instead — the metadata for one
+  // file does not open another's bytes even though both are the same file, sent
+  // by the same person, in the same conversation.
   assert.throws(
     () =>
       openAttachment({
-        ciphertext,
+        ciphertext: first.ciphertext,
         conversationId: CONVERSATION,
-        fileId: "file_2",
-        meta,
+        meta: second.meta,
       }),
-    "a file opened under a different id",
+    "one file's bytes opened under another's metadata",
   );
 
   assert.throws(
     () =>
       openAttachment({
-        ciphertext,
+        ciphertext: first.ciphertext,
         conversationId: OTHER,
-        fileId: "file_1",
-        meta,
+        meta: first.meta,
       }),
     "a file replayed into another conversation",
+  );
+
+  // And the id alone is not enough — the key has to match too.
+  assert.throws(
+    () =>
+      openAttachment({
+        ciphertext: first.ciphertext,
+        conversationId: CONVERSATION,
+        meta: { ...second.meta, id: first.meta.id },
+      }),
+    "another file's key opened these bytes",
   );
 }
 
@@ -142,7 +151,6 @@ const read = (sealed, person, conversation = CONVERSATION) =>
   const { meta } = sealAttachment({
     bytes: FILE,
     conversationId: CONVERSATION,
-    fileId: "file_1",
     name: "receipts.pdf",
   });
 
@@ -167,11 +175,7 @@ const read = (sealed, person, conversation = CONVERSATION) =>
 /* ── somebody with no wrapped key gets no file key either ────────────────── */
 
 {
-  const { meta } = sealAttachment({
-    bytes: FILE,
-    conversationId: CONVERSATION,
-    fileId: "file_1",
-  });
+  const { meta } = sealAttachment({ bytes: FILE, conversationId: CONVERSATION });
 
   const sealed = await sealMessage({
     plaintext: "not for carol",
@@ -188,8 +192,8 @@ const read = (sealed, person, conversation = CONVERSATION) =>
 /* ── a file entry moved onto another file does not open ──────────────────── */
 
 {
-  const first = sealAttachment({ bytes: FILE, conversationId: CONVERSATION, fileId: "file_1" });
-  const second = sealAttachment({ bytes: FILE, conversationId: CONVERSATION, fileId: "file_2" });
+  const first = sealAttachment({ bytes: FILE, conversationId: CONVERSATION });
+  const second = sealAttachment({ bytes: FILE, conversationId: CONVERSATION });
 
   const sealed = await sealMessage({
     plaintext: "two files",
@@ -238,13 +242,9 @@ const read = (sealed, person, conversation = CONVERSATION) =>
 {
   for (const size of [0, 1]) {
     const bytes = new Uint8Array(size);
-    const { ciphertext, meta } = sealAttachment({
-      bytes,
-      conversationId: CONVERSATION,
-      fileId: "edge",
-    });
+    const { ciphertext, meta } = sealAttachment({ bytes, conversationId: CONVERSATION });
     assert.deepEqual(
-      Array.from(openAttachment({ ciphertext, conversationId: CONVERSATION, fileId: "edge", meta })),
+      Array.from(openAttachment({ ciphertext, conversationId: CONVERSATION, meta })),
       Array.from(bytes),
       `${size} bytes did not survive the round trip`,
     );
@@ -252,5 +252,5 @@ const read = (sealed, person, conversation = CONVERSATION) =>
 }
 
 console.log(
-  "attachments: a file per key, bound to its id and conversation, with the key only inside the sealed message",
+  "attachments: a key per file, bound to a value the sender chose, with that key only inside the sealed message",
 );
