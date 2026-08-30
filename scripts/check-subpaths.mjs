@@ -29,6 +29,15 @@ assert.deepEqual(
   "the wildcard subpath is what the client's barrel resolves through",
 );
 
+// The wildcard swallows this otherwise, resolving `@gryt/crypto/package.json`
+// to `dist/package.json.js` and failing. Metro, expo-doctor and most bundlers
+// read a dependency's manifest that way, so it has to keep working.
+assert.equal(
+  pkg.exports["./package.json"],
+  "./package.json",
+  "the manifest has to stay reachable past the wildcard",
+);
+
 /** The seven the client takes by subpath, and `peer-keys`, which it wraps. */
 const MODULES = [
   "comparison-code",
