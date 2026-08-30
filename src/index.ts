@@ -33,6 +33,7 @@
  * setting.
  */
 
+export * from "./attachments";
 export * from "./comparison-code";
 export * from "./conversation-encryption";
 export * from "./dm-key-binding";

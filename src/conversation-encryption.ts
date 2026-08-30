@@ -27,7 +27,13 @@
  * outside — the message sends, it arrives, it reads normally.
  */
 
-import { openMessage, type SealedMessage,sealMessage } from "./message-keys";
+import type { SealedAttachmentKey } from "./attachments";
+import {
+  openMessage,
+  type OpenedMessage,
+  type SealedMessage,
+  sealMessage,
+} from "./message-keys";
 import { type PeerKeyDecision } from "./peer-keys";
 
 export interface ConversationMember {
@@ -117,11 +123,20 @@ export async function sealForConversation({
   conversationId,
   senderKeys,
   decision,
+  attachments,
 }: {
   plaintext: string;
   conversationId: string;
   senderKeys: { privateKey: Uint8Array; publicKey: Uint8Array };
   decision: SealDecision;
+  /**
+   * File id to what `sealAttachment` returned for it (GRYT-729).
+   *
+   * A conversation that cannot be sealed returns null here, and a caller that
+   * has already encrypted and uploaded files then has an upload nobody can
+   * open. Encrypt the files *after* checking `decision.kind`, not before.
+   */
+  attachments?: Record<string, SealedAttachmentKey>;
 }): Promise<string | null> {
   if (decision.kind !== "seal") return null;
 
@@ -130,6 +145,7 @@ export async function sealForConversation({
     conversationId,
     senderKeys,
     recipients: decision.recipients,
+    attachments,
   });
 
   return JSON.stringify(sealed);
@@ -155,7 +171,7 @@ export async function openForConversation({
   conversationId: string;
   memberId: string;
   recipientKeys: { privateKey: Uint8Array; publicKey: Uint8Array };
-}): Promise<string | null> {
+}): Promise<OpenedMessage | null> {
   let envelope: SealedMessage;
   try {
     envelope = JSON.parse(sealed);

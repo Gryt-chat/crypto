@@ -20,6 +20,8 @@ either way.
 - **`conversation-encryption`** — every member has a usable key, or nobody gets
   it sealed.
 - **`comparison-code`** — sixty digits two people read to each other.
+- **`attachments`** — a key per file, bound to its id, with the key inside the
+  sealed message.
 
 ## Importing it
 
@@ -50,6 +52,11 @@ config.
 Two exceptions, named where they are: `crypto.getRandomValues`, which every
 target has, and signing a binding, which takes either a WebCrypto key or a
 function, because that is the one place the platforms hold a key differently.
+
+**Hiding that a file exists.** An attachment is encrypted and its name, type and
+dimensions go inside the message, but the server still sees that a file was
+uploaded, how big the ciphertext is, and when. Padding the size is separate work
+and is not pretended at.
 
 **Forward secret.** A message key comes from the seed and never moves, so a seed
 that leaks reads every message ever sent to it. Signal and Matrix ratchet; this

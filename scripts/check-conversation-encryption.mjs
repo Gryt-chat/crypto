@@ -133,12 +133,12 @@ const self = { memberId: me.memberId, publicKey: me.keys.publicKey };
 
   for (const person of [me, bob, carol]) {
     assert.equal(
-      await openForConversation({
+      (await openForConversation({
         sealed,
         conversationId: CONVERSATION,
         memberId: person.memberId,
         recipientKeys: person.keys,
-      }),
+      })).text,
       "the whole group should read this",
       `${person.memberId} could not read it`,
     );
