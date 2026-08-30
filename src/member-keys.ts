@@ -13,19 +13,14 @@
  * lived behind a Vite alias.
  */
 
-import type { IdentityScope } from "./scope";
+import { base64Url } from "./base64";
 import {
   evaluatePeerKey,
   type PeerKeyDecision,
   type PeerPinStore,
   pinPeerKey,
 } from "./peer-keys";
-
-function base64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
+import type { IdentityScope } from "./scope";
 
 export interface MemberKeyState {
   decision: PeerKeyDecision;

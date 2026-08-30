@@ -21,29 +21,11 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
 
-      # The three checks below already existed and already ran — from
-      # `prepublishOnly`, which is to say after a pull request had merged and a
-      # release was halfway through. Each one is here because something got out
-      # once:
-      #
-      #   GRYT-344 shipped a package tsc was happy with and Node could not load,
-      #   every relative import in dist extensionless.
-      #
-      #   The React Native entry exists so a phone bundle carries no AudioContext
-      #   and no RNNoise worker, and Metro follows `new Worker(new URL(...))`. One
-      #   convenient import from the wrong file becomes "Unable to resolve module
-      #   @shiguredo/rnnoise-wasm" in somebody else's app, releases later.
-      #
-      #   GRYT-433: two files declared `NativeAudioCapture`, the explicit
-      #   re-export beat the star export silently, and the hook's return type
-      #   could not be named from outside the package at all.
-      #
-      # None of those are things a reviewer catches by reading a diff, and all
-      # three run against the built dist, so they belong after `build` and
-      # before a merge rather than after one.
-      # Against `dist`, not `src`, because dist is what a client installs — and
-      # because the two are not the same thing: `add-esm-extensions.mjs` rewrites
-      # every specifier on the way out, and a package that typechecks and cannot
-      # be imported is exactly what GRYT-344 shipped.
+      # Against `dist`, not `src`, because dist is what a client installs, and
+      # the two are not the same file: `add-esm-extensions.mjs` rewrites every
+      # relative specifier on the way out. GRYT-344 shipped a `@gryt/voice` that
+      # tsc was happy with and Node could not load, every import extensionless,
+      # and it got out because the checks ran from `prepublishOnly` — which is
+      # after a pull request has merged and a release is halfway done.
       - name: Check the crypto
         run: npm test

@@ -32,6 +32,7 @@
  * This module decides. It does not fetch, encrypt, or draw anything.
  */
 
+import { base64Url } from "./base64";
 import {
   type VerifiedDmKeyBinding,
   verifyDmKeyBinding,
@@ -109,12 +110,6 @@ export type PeerKeyDecision =
       changedIdentity: boolean;
       changedKey: boolean;
     };
-
-function base64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
 
 /**
  * One pin per server and member.

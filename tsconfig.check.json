@@ -1,0 +1,12 @@
+{
+  // Typechecking covers more than the build does. `types-check/` holds
+  // assertions written as code — `@ts-expect-error` on calls that must not
+  // compile — and they have to be checked without being shipped, so they sit
+  // outside `rootDir` and this config is what sees them.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src", "types-check"]
+}

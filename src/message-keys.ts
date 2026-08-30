@@ -53,6 +53,7 @@
  */
 import { gcm } from "@noble/ciphers/aes.js";
 
+import { base64Url, base64UrlDecode } from "./base64";
 import { type DmKeyPair, dmSharedSecret } from "./dm-keys";
 
 const IV_BYTES = 12;
@@ -90,20 +91,6 @@ export interface Recipient {
   memberId: string;
   /** Their DM public key, as `dmPublicKey` returns it. */
   publicKey: Uint8Array;
-}
-
-function base64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function fromBase64Url(value: string): Uint8Array<ArrayBuffer> {
-  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
-  const binary = atob(padded);
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-  return out as Uint8Array<ArrayBuffer>;
 }
 
 function randomBytes(length: number): Uint8Array<ArrayBuffer> {
@@ -273,21 +260,21 @@ export async function openMessage({
 
   const secret = dmSharedSecret(
     recipientKeys.privateKey,
-    fromBase64Url(sealed.sender),
+    base64UrlDecode(sealed.sender),
     conversationId,
   );
 
   const contentKey = aesGcm(
     secret,
-    fromBase64Url(mine.iv),
+    base64UrlDecode(mine.iv),
     wrapContext(conversationId, sealed.sender, memberId),
-  ).decrypt(fromBase64Url(mine.key));
+  ).decrypt(base64UrlDecode(mine.key));
 
   const plain = aesGcm(
     contentKey,
-    fromBase64Url(sealed.iv),
+    base64UrlDecode(sealed.iv),
     bodyContext(conversationId, sealed.sender),
-  ).decrypt(fromBase64Url(sealed.body));
+  ).decrypt(base64UrlDecode(sealed.body));
 
   return new TextDecoder().decode(plain);
 }

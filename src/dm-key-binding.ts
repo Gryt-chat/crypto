@@ -45,6 +45,7 @@
 import { p256 } from "@noble/curves/nist.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 
+import { base64Url, base64UrlDecode } from "./base64";
 import { asIdentityScope, type IdentityScope } from "./scope";
 import { jwkThumbprint } from "./thumbprint";
 
@@ -74,19 +75,6 @@ export interface VerifiedDmKeyBinding {
   signedAt: number;
 }
 
-function base64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-function fromBase64Url(value: string): Uint8Array<ArrayBuffer> {
-  const binary = atob(value.replace(/-/g, "+").replace(/_/g, "/"));
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
-  return out as Uint8Array<ArrayBuffer>;
-}
-
 /**
  * A JWK's public point as the uncompressed bytes the curve library takes.
  *
@@ -101,8 +89,8 @@ function jwkToPoint(jwk: Record<string, unknown>): Uint8Array<ArrayBuffer> {
     throw new Error("That DM key binding's key has no coordinates.");
   }
 
-  const x = fromBase64Url(jwk.x);
-  const y = fromBase64Url(jwk.y);
+  const x = base64UrlDecode(jwk.x);
+  const y = base64UrlDecode(jwk.y);
   if (x.length !== 32 || y.length !== 32) {
     throw new Error("A P-256 coordinate is 32 bytes.");
   }
@@ -206,8 +194,8 @@ export async function verifyDmKeyBinding(
   let header: Record<string, unknown>;
   let payload: Record<string, unknown>;
   try {
-    header = JSON.parse(new TextDecoder().decode(fromBase64Url(parts[0])));
-    payload = JSON.parse(new TextDecoder().decode(fromBase64Url(parts[1])));
+    header = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[0])));
+    payload = JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[1])));
   } catch {
     throw new Error("That DM key binding is not readable.");
   }
@@ -248,7 +236,7 @@ export async function verifyDmKeyBinding(
    * emits and what `p256.verify` takes.
    */
   const publicKey = jwkToPoint(jwk as Record<string, unknown>);
-  const signature = fromBase64Url(parts[2]);
+  const signature = base64UrlDecode(parts[2]);
   if (signature.length !== 64) {
     throw new Error("A DM key binding's signature is 64 bytes.");
   }
@@ -278,7 +266,7 @@ export async function verifyDmKeyBinding(
     throw new Error("That DM key binding's signature does not check out.");
   }
 
-  const dmPublicKey = fromBase64Url(payload.dm);
+  const dmPublicKey = base64UrlDecode(payload.dm);
   // X25519 public keys are 32 bytes. Anything else is not one, and passing it
   // to the curve library would be the place that found out.
   if (dmPublicKey.length !== 32) {
@@ -289,7 +277,7 @@ export async function verifyDmKeyBinding(
 
   return {
     dmPublicKey,
-    identityThumbprint: await jwkThumbprint(jwk as JsonWebKey),
+    identityThumbprint: jwkThumbprint(jwk as JsonWebKey),
     scope: asIdentityScope(payload.scope as string),
     signedAt: payload.iat,
   };

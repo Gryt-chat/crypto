@@ -21,11 +21,31 @@ either way.
   it sealed.
 - **`comparison-code`** — sixty digits two people read to each other.
 
+## Importing it
+
+Everything is on the barrel, and every module is also its own subpath:
+
+```ts
+import { sealMessage } from "@gryt/crypto";
+import { sealMessage } from "@gryt/crypto/message-keys";
+```
+
+The subpaths exist because the desktop client re-exports this package through
+its own `@/common` barrel alongside a `peer-keys` of its own — the same
+functions with `localStorage` already supplied. Two star exports of one name is
+ambiguous, and TypeScript drops the name rather than saying so, so it takes the
+other modules by subpath and leaves `peer-keys` to its own file.
+
+That makes the file names here part of the published surface.
+`scripts/check-subpaths.mjs` is what stops a rename getting out.
+
 ## What it deliberately isn't
 
 **Platform-specific.** No `crypto.subtle`, which React Native does not have. No
-storage — pins go through a `PeerPinStore` the caller supplies. No network, no
-React, no config.
+`btoa` or `atob` either — Hermes has them and they stop agreeing with you about
+bytes above `0x7f`, so `base64.ts` does it from the alphabet up. No storage —
+pins go through a `PeerPinStore` the caller supplies. No network, no React, no
+config.
 
 Two exceptions, named where they are: `crypto.getRandomValues`, which every
 target has, and signing a binding, which takes either a WebCrypto key or a
