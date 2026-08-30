@@ -42,8 +42,10 @@ That makes the file names here part of the published surface.
 ## What it deliberately isn't
 
 **Platform-specific.** No `crypto.subtle`, which React Native does not have. No
-storage — pins go through a `PeerPinStore` the caller supplies. No network, no
-React, no config.
+`btoa` or `atob` either — Hermes has them and they stop agreeing with you about
+bytes above `0x7f`, so `base64.ts` does it from the alphabet up. No storage —
+pins go through a `PeerPinStore` the caller supplies. No network, no React, no
+config.
 
 Two exceptions, named where they are: `crypto.getRandomValues`, which every
 target has, and signing a binding, which takes either a WebCrypto key or a

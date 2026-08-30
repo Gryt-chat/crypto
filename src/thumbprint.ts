@@ -1,5 +1,7 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 
+import { base64Url } from "./base64";
+
 /**
  * A JWK thumbprint, RFC 7638, for the EC public keys Gryt uses.
  *
@@ -9,14 +11,14 @@ import { sha256 } from "@noble/hashes/sha2.js";
  * the members in lexicographic order, SHA-256, base64url.
  *
  * `@noble/hashes` rather than `crypto.subtle.digest`, so it runs on React
- * Native (GRYT-733).
+ * Native (GRYT-733) — and synchronous, which the WebCrypto version could not be.
  */
-export async function jwkThumbprint(jwk: {
+export function jwkThumbprint(jwk: {
   kty?: string;
   crv?: string;
   x?: string;
   y?: string;
-}): Promise<string> {
+}): string {
   if (jwk.kty !== "EC" || !jwk.crv || !jwk.x || !jwk.y) {
     throw new Error("Not an EC public JWK");
   }
@@ -34,8 +36,3 @@ export async function jwkThumbprint(jwk: {
   return base64Url(sha256(new TextEncoder().encode(canonical) as Uint8Array<ArrayBuffer>));
 }
 
-function base64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const b of bytes) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
