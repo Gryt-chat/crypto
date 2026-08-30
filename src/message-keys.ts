@@ -53,6 +53,7 @@
  */
 import { gcm } from "@noble/ciphers/aes.js";
 
+import type { SealedAttachmentKey } from "./attachments";
 import { base64Url, base64UrlDecode } from "./base64";
 import { type DmKeyPair, dmSharedSecret } from "./dm-keys";
 
@@ -84,6 +85,40 @@ export interface SealedMessage {
   body: string;
   /** Member id to that member's wrapped copy of the content key. */
   keys: Record<string, WrappedKey>;
+  /**
+   * File id to that file's key and real metadata, encrypted (GRYT-729).
+   *
+   * Absent on every message sent before attachments could be sealed, and on
+   * every message with no files, which is most of them. A reader that finds
+   * nothing here and a message that carries `attachments` is looking at a
+   * conversation where the files went up in the clear.
+   *
+   * Encrypted under this message's content key rather than wrapped per member,
+   * because the content key is already wrapped per member — doing it twice
+   * would be the same secret protected the same way, at N times the size.
+   */
+  files?: Record<string, SealedFileKey>;
+}
+
+/** One file's key and metadata, encrypted under the message's content key. */
+export interface SealedFileKey {
+  iv: string;
+  /** The JSON of a {@link SealedAttachmentKey}, encrypted. */
+  meta: string;
+}
+
+/**
+ * What came out of a message, once it opened.
+ *
+ * `attachments` is empty for a message with no files, which is most of them,
+ * and for every message sealed before files could be. It is deliberately not
+ * optional: a caller that forgets to look at it draws a conversation where
+ * files silently do not appear, and an empty object at least makes the loop
+ * over it run.
+ */
+export interface OpenedMessage {
+  text: string;
+  attachments: Record<string, SealedAttachmentKey>;
 }
 
 export interface Recipient {
@@ -136,6 +171,24 @@ function bodyContext(conversationId: string, sender: string): Uint8Array<ArrayBu
   ) as Uint8Array<ArrayBuffer>;
 }
 
+/**
+ * The same, for one file's key.
+ *
+ * The file id is in here as well as inside the attachment's own envelope, so
+ * the entry for one file cannot be moved onto another and hand a reader the
+ * wrong key — which would fail to decrypt rather than open the wrong file, but
+ * fail in a way that reads like corruption instead of like tampering.
+ */
+function fileKeyContext(
+  conversationId: string,
+  sender: string,
+  fileId: string,
+): Uint8Array<ArrayBuffer> {
+  return new TextEncoder().encode(
+    `${SEALED_MESSAGE_TYPE}/v1/${conversationId}/${sender}/file/${fileId}`,
+  ) as Uint8Array<ArrayBuffer>;
+}
+
 /** The same, for one member's wrapped key. */
 function wrapContext(
   conversationId: string,
@@ -165,11 +218,19 @@ export async function sealMessage({
   conversationId,
   senderKeys,
   recipients,
+  attachments,
 }: {
   plaintext: string;
   conversationId: string;
   senderKeys: DmKeyPair;
   recipients: Recipient[];
+  /**
+   * File id to what `sealAttachment` handed back for it (GRYT-729).
+   *
+   * Whoever can read the message can open its files, and nobody else — which is
+   * the same statement the text carries, made once rather than twice.
+   */
+  attachments?: Record<string, SealedAttachmentKey>;
 }): Promise<SealedMessage> {
   if (recipients.length === 0) {
     throw new Error("A message with no recipients cannot be read by anybody.");
@@ -216,6 +277,23 @@ export async function sealMessage({
     };
   }
 
+  const files: Record<string, SealedFileKey> = {};
+  for (const [fileId, meta] of Object.entries(attachments ?? {})) {
+    const fileIv = randomBytes(IV_BYTES);
+    files[fileId] = {
+      iv: base64Url(fileIv),
+      meta: base64Url(
+        aesGcm(
+          contentKey,
+          fileIv,
+          fileKeyContext(conversationId, sender, fileId),
+        ).encrypt(
+          new TextEncoder().encode(JSON.stringify(meta)) as Uint8Array<ArrayBuffer>,
+        ),
+      ),
+    };
+  }
+
   return {
     type: SEALED_MESSAGE_TYPE,
     version: 1,
@@ -223,6 +301,10 @@ export async function sealMessage({
     iv: base64Url(iv),
     body: base64Url(body),
     keys,
+    // Left off entirely when there are none, so a message with no files is the
+    // same bytes it was before this existed and `check-crypto-vectors.mjs`
+    // keeps meaning what it means.
+    ...(Object.keys(files).length > 0 ? { files } : null),
   };
 }
 
@@ -250,7 +332,7 @@ export async function openMessage({
   /** Which member you are, as the conversation names you. */
   memberId: string;
   recipientKeys: DmKeyPair;
-}): Promise<string | null> {
+}): Promise<OpenedMessage | null> {
   if (sealed.type !== SEALED_MESSAGE_TYPE || sealed.version !== 1) {
     throw new Error("That is not a sealed message this version can read.");
   }
@@ -276,5 +358,18 @@ export async function openMessage({
     bodyContext(conversationId, sealed.sender),
   ).decrypt(base64UrlDecode(sealed.body));
 
-  return new TextDecoder().decode(plain);
+  const attachments: Record<string, SealedAttachmentKey> = {};
+  for (const [fileId, entry] of Object.entries(sealed.files ?? {})) {
+    const meta = aesGcm(
+      contentKey,
+      base64UrlDecode(entry.iv),
+      fileKeyContext(conversationId, sealed.sender, fileId),
+    ).decrypt(base64UrlDecode(entry.meta));
+
+    attachments[fileId] = JSON.parse(
+      new TextDecoder().decode(meta),
+    ) as SealedAttachmentKey;
+  }
+
+  return { text: new TextDecoder().decode(plain), attachments };
 }

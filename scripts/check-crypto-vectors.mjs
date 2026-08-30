@@ -36,12 +36,12 @@ const BINDING =
 {
   const alice = deriveDmKeyPair(seed(3), SCOPE);
   assert.equal(
-    await openMessage({
+    (await openMessage({
       sealed: SEALED,
       conversationId: CONVERSATION,
       memberId: "user_alice",
       recipientKeys: alice,
-    }),
+    })).text,
     "vector plaintext, sealed by the WebCrypto build",
     "a message this device sealed before the change no longer opens",
   );
@@ -52,12 +52,12 @@ const BINDING =
 {
   const bob = deriveDmKeyPair(seed(7), SCOPE);
   assert.equal(
-    await openMessage({
+    (await openMessage({
       sealed: SEALED,
       conversationId: CONVERSATION,
       memberId: "user_bob",
       recipientKeys: bob,
-    }),
+    })).text,
     "vector plaintext, sealed by the WebCrypto build",
     "a message somebody else sealed before the change no longer opens",
   );

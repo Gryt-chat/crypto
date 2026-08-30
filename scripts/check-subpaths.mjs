@@ -40,6 +40,7 @@ assert.equal(
 
 /** The seven the client takes by subpath, and `peer-keys`, which it wraps. */
 const MODULES = [
+  "attachments",
   "comparison-code",
   "conversation-encryption",
   "dm-key-binding",

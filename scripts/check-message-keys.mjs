@@ -38,13 +38,14 @@ const mallory = { id: "mallory", keys: deriveDmKeyPair(seed(17), HOST) };
 const asRecipient = (p) => ({ memberId: p.id, publicKey: p.keys.publicKey });
 const group = [alice, bob, carol].map(asRecipient);
 
-const read = (sealed, person, conversation = CONVERSATION) =>
-  openMessage({
+/** The text only. `openMessage` returns `{ text, attachments }` since GRYT-729. */
+const read = async (sealed, person, conversation = CONVERSATION) =>
+  (await openMessage({
     sealed,
     conversationId: conversation,
     memberId: person.id,
     recipientKeys: person.keys,
-  });
+  }))?.text ?? null;
 
 const seal = (plaintext, recipients = group, sender = alice, conversation = CONVERSATION) =>
   sealMessage({
