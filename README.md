@@ -1,7 +1,14 @@
-# @gryt/crypto
+<div align="center">
+  <img src="https://raw.githubusercontent.com/Gryt-chat/client/main/public/logo.svg" width="80" alt="Gryt logo" />
+  <h1>@gryt/crypto</h1>
+  <p>Message encryption for <a href="https://gryt.chat">Gryt</a>.<br />Key derivation, key bindings, sealed envelopes, pinning, and the code two people compare out of band.</p>
+</div>
 
-Message encryption for [Gryt](https://gryt.chat): key derivation, key bindings,
-sealed envelopes, pinning, and the code two people compare out of band.
+<br />
+
+```sh
+npm install @gryt/crypto
+```
 
 Used by the desktop client and the mobile app. They run this, not two ports of
 it — two implementations of one envelope is a pair of clients that send each
@@ -72,6 +79,20 @@ what a client installs. `check-crypto-vectors.mjs` holds bytes produced before
 the WebCrypto-to-noble conversion and nothing regenerates them — a change that
 quietly altered the envelope would leave every message already sent unreadable.
 
-## Licence
+## Issues
 
-AGPL-3.0-only.
+Please report bugs and request features in the
+[main Gryt repository](https://github.com/Gryt-chat/gryt/issues).
+
+## Sponsors
+
+What sponsoring pays for, the tiers, and everyone who has sponsored:
+[gryt.chat/sponsors](https://gryt.chat/sponsors). To sponsor:
+[GitHub Sponsors](https://github.com/sponsors/Gryt-chat).
+
+The list itself lives in the [Gryt README](https://github.com/Gryt-chat/gryt#sponsors),
+in one place rather than ten, so it cannot fall out of step across repositories.
+
+## License
+
+[AGPL-3.0](https://github.com/Gryt-chat/gryt/blob/main/LICENSE) — Part of [Gryt](https://github.com/Gryt-chat/gryt)
