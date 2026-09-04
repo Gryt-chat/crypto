@@ -1,94 +1,42 @@
 /**
  * The key a direct message is encrypted to (GRYT-709).
  *
- * Separate from the identity key on purpose, and not because it is tidier. The
- * identity key is ECDSA P-256, which signs and cannot do key agreement — there
- * is no operation that turns two ECDSA keys into a shared secret. Encryption
- * needs a curve built for agreement, so this is X25519 and it is a second key.
+ * A second key rather than the identity one, because identity is ECDSA P-256,
+ * which signs and cannot do key agreement at all. This is X25519.
  *
- * ## Nothing secret ever leaves the device
+ * Only {@link dmPublicKey} is published. The private half is derived here and
+ * never sent, backed up or logged — the 24-word phrase carries the seed, which
+ * is enough to re-derive it and read old messages again.
  *
- * Only {@link dmPublicKey} is published. The private half is derived here, used
- * here, and never sent anywhere — not to the server, not encrypted, not as part
- * of a backup. A server that wanted to read a conversation would have to obtain
- * something that has never been transmitted.
+ * One key per server, from the same scope `identity-seed.ts` uses, so two
+ * servers cannot tell they are talking to the same person.
  *
- * What *is* backed up is the seed, which the 24-word phrase already carries. So
- * restoring an identity restores the ability to read old messages, without
- * anything about the messages being stored anywhere but the server that already
- * has them.
+ * **The scope, not the address (GRYT-719).** Deriving from the address would
+ * change the key whenever a port is taken or a lease moves, and every message
+ * ever encrypted to the old key would be unreadable with nothing logged.
+ * `IdentityScope` is branded so the wrong string does not typecheck.
  *
- * ## One key per server, like the identity key
- *
- * `identity-seed.ts` derives a separate key for each server so that two of them
- * cannot tell they are talking to the same person. That property is worth
- * exactly as much here, and would be undone by a single DM key shared across
- * servers — so the same scope goes into the derivation.
- *
- * **The scope, not the address (GRYT-719).** `identityScopeFor` gives the
- * server's lineage id, and only falls back to the address for a server that
- * proved nothing. Deriving from the address instead would give a server on a
- * LAN address and a tunnel two DM keys, and would change the key whenever a
- * port is taken or a lease moves. For the identity key that bug meant arriving
- * as a stranger, which GRYT-257 fixed and which is at least visible. Here it
- * would mean every message ever encrypted to the old key is unreadable, with
- * nothing logged. `IdentityScope` is branded so the wrong string does not
- * typecheck.
- *
- * The consequence is that a conversation is bound to the server it happens on,
- * which is what `useDirectMessages.ts` and `conversations.ts` already say about
- * DMs in plaintext. Encryption does not change the shape, it enforces it.
- *
- * ## What this file does not do
- *
- * It derives a keypair and computes a shared secret. It does not publish the
- * public key, does not encrypt a message, and does not know what a conversation
- * is. Wrapping a per-message key for each member, and the certificate that says
- * whose public key is whose, are the parts that follow — and the certificate is
- * the one that decides whether any of this is worth anything, because a shared
- * secret with a key the server chose for you protects nothing.
+ * This derives a keypair and computes a shared secret. Wrapping a per-message
+ * key, and the certificate saying whose public key is whose, come later — and
+ * the certificate is what decides whether any of this is worth anything.
  */
 
 import { x25519 } from "@noble/curves/ed25519.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 
-/*
- * Type-only, so it erases before anything tries to resolve it.
- * `check-dm-keys.mjs` runs this file through Node's type stripping, which does
- * no extension inference, and a value import from a sibling would need a `.ts`
- * on it — the one in `message-keys.ts` explains that. A type never reaches the
- * loader at all.
- */
 import type { IdentityScope } from "./scope";
 
 /**
- * Domain separator, and why it is not the identity one.
- *
- * `identity-seed.ts` uses `gryt-identity-v1`. Deriving both keys from one seed
- * under the same label would hand the same 32 bytes to two different
- * algorithms, which is the kind of reuse that turns two safe primitives into
- * one unsafe system. A different label makes the two keys independent: knowing
- * either tells you nothing about the other, because HKDF's outputs for
- * different `info` are unrelated to anyone without the seed.
- *
- * Versioned for the same reason the identity one is. Changing this string
- * changes every DM key that has ever existed, which would make every message
- * already sent unreadable — so a `v2` arrives with a migration or not at all.
+ * Not `identity-seed.ts`'s label: one seed under one label would hand the same
+ * 32 bytes to two algorithms. Changing this string changes every DM key that
+ * has ever existed, so a `v2` arrives with a migration or not at all.
  */
 const DERIVATION_SALT = "gryt-dm-v1";
 
 /**
- * Exactly 32, and this is where X25519 differs from the P-256 path next door.
- *
- * `deriveLocalKeyPair` takes 48 bytes and reduces them modulo the curve order,
- * because a P-256 scalar has to land in a range that 32 uniform bytes overshoot
- * slightly, and the excess makes low values fractionally likelier.
- *
- * X25519 has no such range. Any 32 bytes is a valid secret — the algorithm
- * clamps the bits it cares about itself, which is part of its definition rather
- * than something a caller does. So taking more than 32 and reducing would be
- * ceremony that copies the shape of the other function without its reason.
+ * Exactly 32, unlike `deriveLocalKeyPair`'s 48-then-reduce: any 32 bytes is a
+ * valid X25519 secret, and the algorithm clamps what it needs itself.
  */
 const SECRET_BYTES = 32;
 
@@ -97,13 +45,9 @@ function utf8(value: string): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * Refuse a seed this obviously cannot be right.
- *
- * The mirror of `assertUsableSeed` in `identity-seed.ts`, and here for the same
- * reason: a stub or a platform handing back a constant would give every device
- * the same DM key, and every user would be able to read every conversation. A
- * real seed being all one byte has a probability around 2^-248, so nothing
- * legitimate is being turned away.
+ * A stub or a platform handing back a constant would give every device the same
+ * DM key, and every user could read every conversation. A real seed being all
+ * one byte is about 2^-248, so nothing legitimate is turned away.
  */
 function assertUsableSeed(seed: Uint8Array): void {
   if (seed.length !== SECRET_BYTES) {
@@ -122,17 +66,9 @@ export interface DmKeyPair {
 }
 
 /**
- * The DM keypair this seed gives for one server.
- *
- * Deterministic: the same seed and scope give the same keypair on any device,
- * which is what makes the recovery phrase enough to read old conversations
- * again — and, because the scope outlives an address change, what makes them
- * still readable after the server moves.
- *
- * Raw bytes rather than a `CryptoKey`, because WebCrypto's X25519 support is
- * younger than the browsers Gryt runs on and the agreement below is done by the
- * curve library anyway. There is nothing to gain from importing a key into an
- * API that is not going to perform the operation.
+ * The DM keypair this seed gives for one server. Deterministic, so the recovery
+ * phrase is enough to read old conversations, and the scope outliving an
+ * address change keeps them readable after the server moves.
  */
 export function deriveDmKeyPair(
   seed: Uint8Array,
@@ -160,19 +96,14 @@ export function dmPublicKey(
 }
 
 /**
- * The secret two people share, from one private half and one public half.
+ * The secret two people share. Run through HKDF because the X25519 output is a
+ * curve point's x-coordinate, not uniform over 32 bytes; the conversation id
+ * goes in as `info` so one pair talking twice does not reuse a key.
  *
- * Run through HKDF rather than used raw. The X25519 output is a curve point's
- * x-coordinate, which is not uniformly distributed over 32 bytes, and a key
- * derivation function is what turns it into something safe to use as one. The
- * conversation id goes in as `info`, so the same pair of people talking in two
- * conversations do not derive the same key in both.
- *
- * **This is not enough on its own, and the gap is not in the maths.** Agreement
- * with the wrong public key succeeds exactly as well as agreement with the right
- * one — both produce a perfectly good secret. Whether `theirPublicKey` belongs
- * to the person named beside it is the question the certificate answers, and
- * until that exists a caller is trusting the server for it.
+ * **Not enough on its own.** Agreement with the wrong public key succeeds just
+ * as well as with the right one. Whether `theirPublicKey` belongs to the person
+ * named beside it is what the certificate answers, and until that exists a
+ * caller is trusting the server for it.
  */
 export function dmSharedSecret(
   privateKey: Uint8Array,

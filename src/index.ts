@@ -1,42 +1,22 @@
 /**
- * Message encryption for Gryt.
+ * Message encryption for Gryt, shared by the desktop client and the mobile app.
  *
- * Everything the desktop client and the mobile app both need to derive message
- * keys, say a key is theirs, seal a message to a conversation, decide whether a
- * peer's key is the one seen before, and let two people check that out of band.
+ * One implementation on purpose: two ports of one envelope is a pair of clients
+ * that send each other messages nobody can read, and no set of test vectors
+ * between two implementations is as good as not having two.
  *
- * ## One implementation, on purpose
+ * Nothing here touches a platform — no `crypto.subtle`, no storage, no network,
+ * no React. The exceptions are named where they are: `crypto.getRandomValues`,
+ * and signing a key binding, which takes a WebCrypto key or a function.
  *
- * This started as seven files in the client and a plan to port them. Two ports
- * of one envelope is a pair of clients that send each other messages nobody can
- * read, with the sender looking at the text they typed either way — and no
- * amount of test vectors between two implementations is as good as not having
- * two. GRYT-733 made the code platform-free so this could exist.
- *
- * ## Nothing here touches a platform
- *
- * No `crypto.subtle`, which React Native does not have. No storage: pins go
- * through a {@link PeerPinStore} the caller supplies, because the desktop has
- * `localStorage` and a phone has something asynchronous. No network, no React,
- * no config.
- *
- * The two exceptions are named where they are: `crypto.getRandomValues`, which
- * every target has, and signing a key binding, which takes either a WebCrypto
- * key or a function because that is the one place the platforms genuinely hold
- * a key differently.
- *
- * ## What it does not do
- *
- * Forward secrecy. A DM key is derived from the seed and never moves, so a seed
- * that leaks reads every message ever sent to it. Signal and Matrix ratchet;
- * this does not. That is GRYT-754, and it is a different protocol rather than a
- * setting.
+ * **No forward secrecy.** A DM key is derived from the seed and never moves, so
+ * a leaked seed reads every message ever sent to it. That is GRYT-754, and it
+ * is a different protocol rather than a setting.
  */
 
 export * from "./attachments";
-// Exported because both apps carry their own copy of exactly this, and one of
-// the two is the `btoa` version this file was written to replace. They cannot
-// drop theirs while it is package-internal.
+// Exported so both apps can drop their own copies, one of which is the `btoa`
+// version this replaces.
 export * from "./base64";
 export * from "./comparison-code";
 export * from "./conversation-encryption";

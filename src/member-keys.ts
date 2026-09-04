@@ -1,16 +1,10 @@
 /**
  * What a member list does to your pins (GRYT-727).
  *
- * `peer-keys.ts` decides about one binding. This is the policy over a whole
- * list, and the policy is where the mistakes are: pinning on a change instead
- * of on a first sighting turns the design off and nothing on screen looks
- * different, and pinning your own row means a server that rewrites your key
- * gets it pinned by you.
- *
- * Here rather than in the socket package so a check can import it. The socket
- * half of GRYT-727 is one `emit` and one `then`; this is the part with
- * decisions in it, and it kept none of them within reach of a test while it
- * lived behind a Vite alias.
+ * The policy over a whole list, and where the mistakes are: pinning on a change
+ * instead of a first sighting turns the design off with nothing on screen
+ * looking different, and pinning your own row lets a server that rewrites your
+ * key have it pinned by you.
  */
 
 import { base64Url } from "./base64";
@@ -27,26 +21,17 @@ export interface MemberKeyState {
   /** Whether this row is the person running this client. */
   isSelf: boolean;
   /**
-   * Set only on your own row, and only when it disagrees with what you hold.
-   *
-   * You know what your key on this server should be, because you derived it, so
-   * a member list showing something else under your own id is this server
-   * rewriting it (GRYT-727). It is the one check a single person can run with
-   * nobody else involved — and it catches only the careless version, because an
-   * operator can serve you the truth and everybody else a lie. Combined with
-   * keys riding the member list, the lie then has to hold in front of every
-   * member at once.
+   * Set only on your own row, when the list disagrees with the key you derived
+   * — this server rewriting it (GRYT-727). Catches only the careless version:
+   * an operator can serve you the truth and everybody else a lie.
    */
   ownKeyRewritten?: boolean;
 }
 
 /**
- * Work out what to do about every binding in a member list.
- *
- * `first` is pinned here, because that is what trust on first use means and
- * there is nobody to ask. `changed` is returned untouched and never pinned:
- * somebody has to decide, and a client that re-pinned on its own would have
- * thrown away the only protection this design has.
+ * Work out what to do about every binding in a member list. `first` is pinned
+ * here; `changed` is returned untouched and never pinned, because a client that
+ * re-pinned on its own would throw away the only protection this design has.
  */
 export async function evaluateMemberKeys({
   store,
@@ -59,22 +44,14 @@ export async function evaluateMemberKeys({
   store: PeerPinStore;
   scope: IdentityScope;
   /**
-   * The DM public key this device uses on this server, from `ownDmPublicKey`.
-   *
-   * The public half and nothing more. Taking the seed instead would work and
-   * would mean the master secret leaving the module that owns the database, to
-   * compute a value that module already exposes.
-   *
-   * Null when it cannot be worked out, which turns the self-check off rather
-   * than making it fail.
+   * The public half only, from `ownDmPublicKey`. Null when it cannot be worked
+   * out, which turns the self-check off rather than making it fail.
    */
   ownKey: Uint8Array | null;
   members: { serverUserId: string; dmKeyBinding?: string | null }[];
   /** Null before the member list has said which row is yours. */
   myServerUserId: string | null;
 }): Promise<Record<string, MemberKeyState>> {
-  // Derived once rather than per member, and only when there is a row to check
-  // it against.
   const mine = ownKey && myServerUserId ? base64Url(ownKey) : null;
 
   const states: Record<string, MemberKeyState> = {};

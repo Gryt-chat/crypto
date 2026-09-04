@@ -1,47 +1,23 @@
 /**
  * Saying that a DM key and an identity key belong to the same person (GRYT-720).
  *
- * `dm-keys.ts` derives the key a message is encrypted to. Nothing says whose it
- * is, and a key handed over by a server that could have made it up is worth
- * nothing — a server that wanted to read a conversation would give each side its
- * own key and relay.
+ * A short JWT, signed by the per-server identity key: "this DM public key is
+ * mine, on this server". Without it a server that wanted to read a conversation
+ * could give each side its own key and relay.
  *
- * This is one link of the chain that answers that: a short JWT, signed by the
- * per-server identity key, saying "this DM public key is mine, on this server".
+ * It proves that whoever holds the identity key also chose this DM key, and
+ * **not** whose identity key it is — the public half rides in the header, so a
+ * server can mint a keypair and sign a valid binding with it. What it buys is
+ * that the two keys become one thing to substitute instead of two, and the
+ * identity key is the one the server challenged at join. The caller pins
+ * {@link VerifiedDmKeyBinding.identityThumbprint}; that is the part that means
+ * something, and `server-pins.ts` does the same three moves for server keys.
  *
- * ## What it proves, exactly
- *
- * That whoever holds the identity key also chose this DM key. Nothing else. In
- * particular it does **not** say whose identity key it is — the public half
- * rides in the header, so a server can mint a keypair and sign a perfectly
- * valid binding with it.
- *
- * That is not a hole in this file, it is where the problem actually lives.
- * Nothing verifiable in band can say who a key belongs to; the regress stops at
- * something pinned earlier or something compared out of band, and at nothing
- * else. What this buys is that the two keys are now one thing to substitute
- * instead of two, and the identity key is the one the server challenged at join
- * — so a server handing out a forged binding is contradicting a proof it
- * verified itself, in front of every member at once.
- *
- * The caller pins {@link VerifiedDmKeyBinding.identityThumbprint}. That is the
- * part that means something, and `server-pins.ts` already does the same three
- * moves for server keys: pin on first sight, detect a change, refuse it.
- *
- * ## Why the key is inside the signed statement
- *
- * A server storing a DM key and a signature as two fields could serve one
- * person's key with another's signature, and a client checking them separately
- * might not notice. There is one field: the binding. The key is read out of it
- * after the signature verifies, or it is not read at all.
+ * The key lives inside the signed statement rather than beside it, so a server
+ * cannot serve one person's key with another's signature. It is read out after
+ * the signature verifies or not at all.
  */
 
-/*
- * The `.ts` is for Node's type stripping, which `check-dm-key-binding.mjs` runs
- * this file through and which does no extension inference. `message-keys.ts`
- * carries the same one for the same reason; `dm-keys.ts` does not, because its
- * import from here is type-only and erases.
- */
 import { p256 } from "@noble/curves/nist.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 
@@ -75,12 +51,7 @@ export interface VerifiedDmKeyBinding {
   signedAt: number;
 }
 
-/**
- * A JWK's public point as the uncompressed bytes the curve library takes.
- *
- * `0x04`, then x, then y — the same layout `identity-seed.ts` slices apart when
- * it builds a JWK from a derived key, put back together.
- */
+/** A JWK's public point as `0x04 || x || y`, which the curve library takes. */
 function jwkToPoint(jwk: Record<string, unknown>): Uint8Array<ArrayBuffer> {
   if (jwk.kty !== "EC" || jwk.crv !== "P-256") {
     throw new Error("A DM key binding is signed with a P-256 key.");
@@ -107,14 +78,9 @@ function utf8(value: string): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * Sign the statement.
- *
- * There is no expiry. The DM key is derived from the seed and the scope, so it
- * does not roll and a binding does not go stale — and an expiry a client cannot
- * renew while offline would make old messages unreadable for a reason that has
- * nothing to do with anybody's keys. `signedAt` is there so a verifier can
- * prefer the newer of two bindings if one ever does change, which is a
- * different question from whether this one is still good.
+ * Sign the statement. No expiry: the DM key does not roll, and an expiry a
+ * client cannot renew offline would make old messages unreadable for a reason
+ * that has nothing to do with anybody's keys.
  */
 export async function signDmKeyBinding({
   dmPublicKey,
@@ -126,13 +92,8 @@ export async function signDmKeyBinding({
   dmPublicKey: Uint8Array;
   scope: IdentityScope;
   /**
-   * A `CryptoKey`, or a function that signs bytes with the identity key.
-   *
-   * Two shapes because the two clients hold the key differently: the desktop
-   * has a WebCrypto handle, and React Native has raw bytes and a curve library
-   * (GRYT-733). Verifying is pure and shared — every client does it for every
-   * peer — while signing happens once, with your own key, and is the one place
-   * the platforms genuinely differ.
+   * A `CryptoKey`, or a function that signs bytes. Two shapes because the
+   * desktop has a WebCrypto handle and React Native has raw bytes (GRYT-733).
    */
   identityPrivateKey: CryptoKey | ((bytes: Uint8Array) => Promise<Uint8Array>);
   /** Rides in the header, so a verifier that has never seen it can check. */
@@ -171,16 +132,12 @@ export async function signDmKeyBinding({
 }
 
 /**
- * Check a binding, and refuse it rather than returning something partly checked.
+ * Check a binding. Throws on anything wrong rather than returning something
+ * partly checked.
  *
- * Throws on anything wrong. There is no "probably fine" here: a caller that got
- * a value back has a DM key whose signature verified under the thumbprint it was
- * handed, and a caller that did not has nothing to think about.
- *
- * `expectedScope` is required. Without it a binding signed for one server can be
- * replayed by another, which is the cheapest attack available to any operator
- * who can see a member list — and the scope is the one thing the verifier
- * already knows for certain, because it is the server it is talking to.
+ * `expectedScope` is required: without it a binding signed for one server can
+ * be replayed by another, which is the cheapest attack available to an operator
+ * who can see a member list.
  */
 export async function verifyDmKeyBinding(
   binding: string,
@@ -200,10 +157,8 @@ export async function verifyDmKeyBinding(
     throw new Error("That DM key binding is not readable.");
   }
 
-  // Pinned rather than read off the header. `alg: "none"` is the oldest JWT bug
-  // there is, and every softer version of it — accepting HS256 and verifying
-  // the signature with the public key as the HMAC secret — starts with taking
-  // the algorithm from the attacker.
+  // Pinned, not read off the header: `alg: "none"` and its softer variants all
+  // start with taking the algorithm from the attacker.
   if (header.alg !== "ES256" || header.typ !== "JWT") {
     throw new Error("A DM key binding is ES256, and this one says otherwise.");
   }
@@ -228,12 +183,9 @@ export async function verifyDmKeyBinding(
   }
 
   /*
-   * Verified with the curve library rather than the platform (GRYT-733).
-   *
-   * `crypto.subtle` is not on React Native and this file has to run there
-   * unchanged. The signature is the same either way: ES256 is P-256 over a
-   * SHA-256 digest with a raw sixty-four byte `r || s`, which is what WebCrypto
-   * emits and what `p256.verify` takes.
+   * Curve library, not `crypto.subtle`, which React Native lacks (GRYT-733).
+   * Same bytes either way: ES256 is P-256 over SHA-256 with a raw 64-byte
+   * `r || s`.
    */
   const publicKey = jwkToPoint(jwk as Record<string, unknown>);
   const signature = base64UrlDecode(parts[2]);
@@ -242,19 +194,10 @@ export async function verifyDmKeyBinding(
   }
 
   /*
-   * `lowS: false`, and this is not a relaxation.
-   *
-   * ECDSA has two valid signatures for every message — `s` and `order - s` —
-   * and noble refuses the high one by default, because for a blockchain a
-   * signature that can be rewritten while staying valid is a transaction that
-   * can be replayed under a second id. Nothing here is identified by its
-   * signature.
-   *
-   * WebCrypto does not normalise, JOSE does not require it, and roughly half of
-   * all ES256 signatures come out high. Leaving the default on would have
-   * rejected about half of every client's bindings, at random, with the message
-   * that the signature did not check out — and the other half would have worked
-   * perfectly, which is the shape of bug that survives a lot of testing.
+   * `lowS: false` is not a relaxation. Noble refuses high-`s` signatures by
+   * default for blockchain replay reasons that do not apply here, WebCrypto
+   * does not normalise, and about half of all ES256 signatures come out high —
+   * so the default would reject half of every client's bindings at random.
    */
   const ok = p256.verify(
     signature,
@@ -267,8 +210,8 @@ export async function verifyDmKeyBinding(
   }
 
   const dmPublicKey = base64UrlDecode(payload.dm);
-  // X25519 public keys are 32 bytes. Anything else is not one, and passing it
-  // to the curve library would be the place that found out.
+  // X25519 public keys are 32 bytes; the curve library would otherwise be the
+  // place that found out.
   if (dmPublicKey.length !== 32) {
     throw new Error(
       `A DM public key is 32 bytes, and this one is ${dmPublicKey.length}.`,

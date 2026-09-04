@@ -3,15 +3,9 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import { base64Url } from "./base64";
 
 /**
- * A JWK thumbprint, RFC 7638, for the EC public keys Gryt uses.
- *
- * Copied out of the client's `server-pins.ts` rather than imported, because
- * that module is about pinning *servers* and this package has no business
- * knowing about those. The bytes are identical: the same canonical JSON with
- * the members in lexicographic order, SHA-256, base64url.
- *
- * `@noble/hashes` rather than `crypto.subtle.digest`, so it runs on React
- * Native (GRYT-733) — and synchronous, which the WebCrypto version could not be.
+ * A JWK thumbprint, RFC 7638, for the EC public keys Gryt uses. Byte-identical
+ * to the client's `server-pins.ts` version. `@noble/hashes` rather than
+ * `crypto.subtle`, so it runs on React Native and synchronously (GRYT-733).
  */
 export function jwkThumbprint(jwk: {
   kty?: string;
@@ -23,9 +17,8 @@ export function jwkThumbprint(jwk: {
     throw new Error("Not an EC public JWK");
   }
 
-  // Lexicographic, and only these four. RFC 7638 says a thumbprint is over the
-  // required members with no whitespace — adding `ext` or `key_ops` would give
-  // the same key two different thumbprints depending on where it came from.
+  // Only these four, lexicographic, no whitespace. Adding `ext` or `key_ops`
+  // gives one key two thumbprints depending on where it came from.
   const canonical = JSON.stringify({
     crv: jwk.crv,
     kty: jwk.kty,
