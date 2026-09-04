@@ -1,6 +1,6 @@
 {
   "name": "@gryt/crypto",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Message encryption for Gryt: key derivation, key bindings, sealed envelopes, pinning and comparison codes. Shared by the desktop client and the mobile app.",
   "license": "AGPL-3.0-only",
   "repository": {
