@@ -1,17 +1,11 @@
 /**
  * base64url, without `btoa` and `atob`.
  *
- * Every module here used to carry its own two-line pair built on the host's
- * base64: a string assembled one `String.fromCharCode` at a time, handed to
- * `btoa`. That is fine in a browser and it is what the client did for a year.
+ * `btoa` is not safe on Hermes: a byte above `0x7f` and the engine's idea of a
+ * binary string stops matching yours. This package runs on both clients, so it
+ * cannot use the one that works on only one of them.
  *
- * It is not safe on Hermes, and the mobile app's own `encoding.ts` says so in a
- * comment written by somebody who hit it — a byte above `0x7f` and the engine's
- * idea of a binary string stops matching yours. This package exists so the two
- * clients run one implementation, so it cannot be the one that only works on
- * one of them. Bytes in, ASCII out, no globals involved.
- *
- * Byte-for-byte identical to what `btoa` produced. `check-crypto-vectors.mjs`
+ * Byte-for-byte identical to what `btoa` produced; `check-crypto-vectors.mjs`
  * holds envelopes from before this file existed and is what says so.
  */
 
@@ -42,13 +36,8 @@ const LOOKUP = new Map<string, number>();
 for (let i = 0; i < ALPHABET.length; i++) LOOKUP.set(ALPHABET[i], i);
 
 /**
- * Takes either alphabet and padding or none of it.
- *
- * The callers disagreed about this before they shared a decoder: one stripped
- * `+/` into `-_` and passed whatever padding arrived to `atob`, the other did
- * not. Both shapes turn up — a binding is unpadded and a wrapped key is written
- * by this file — so accepting both is the honest reading rather than a
- * convenience.
+ * Takes either alphabet, padded or not. Both shapes turn up: a binding is
+ * unpadded, and the callers disagreed before they shared a decoder.
  */
 export function base64UrlDecode(value: string): Uint8Array<ArrayBuffer> {
   const clean = value.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

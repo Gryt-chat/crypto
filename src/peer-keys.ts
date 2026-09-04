@@ -1,35 +1,19 @@
 /**
  * Trust-on-first-use pinning of the people you talk to (GRYT-726).
  *
- * `dm-key-binding.ts` can check that a DM key and an identity key were chosen
- * by the same person. It cannot say who that person is, and nothing in band
- * can — so what makes a binding worth anything is that the same one keeps
- * arriving. This is the module that remembers.
+ * A binding is worth something because the same one keeps arriving. This is
+ * what remembers. Same three moves `server-pins.ts` has made for servers since
+ * GRYT-51 — record on first sight, notice a change, refuse it — with separate
+ * storage, since forgetting a server should not forget the people on it.
  *
- * `server-pins.ts` does exactly this for servers and has since GRYT-51. Same
- * three moves: record on first sight, notice a change, refuse it. The shapes are
- * deliberately similar and the storage is deliberately separate, because a
- * server key and a person's key answer different questions, and one being
- * forgotten should not take the other with it.
+ * **There is no automatic re-pin.** A change is reported and stays reported
+ * until somebody decides, because a restored seed and a substituted key look
+ * identical from here and only one is the person's own doing.
  *
- * ## Refusing is the feature
- *
- * A client that quietly encrypts to a new key once the old one stops matching
- * has thrown away the only protection this design has. There is no automatic
- * re-pin here at all. A change is reported and stays reported until somebody
- * decides, because the two reasons for one — a person restored a different seed,
- * or a server substituted a key — look identical from here, and only one of them
- * is the person's own doing.
- *
- * ## Both halves are compared, not just the identity
- *
- * An account holder's identity key is generated once and kept; their DM key is
- * derived from the seed. Somebody who restores a different seed therefore keeps
- * the same identity key and arrives with a different DM key, and comparing only
- * the thumbprint would wave that through. Comparing only the DM key misses the
- * reverse. Both, or the check has a hole in whichever direction is left out.
- *
- * This module decides. It does not fetch, encrypt, or draw anything.
+ * Both halves are compared. An identity key is generated once and kept while a
+ * DM key is derived from the seed, so somebody restoring a different seed
+ * arrives with the same thumbprint and a new DM key. Comparing one leaves a
+ * hole in whichever direction is left out.
  */
 
 import { base64Url } from "./base64";
@@ -40,26 +24,16 @@ import {
 import type { IdentityScope } from "./scope";
 
 /**
- * Where pins are kept, which this package deliberately does not decide.
- *
- * The desktop has `localStorage` and React Native does not. Rather than an
- * async storage abstraction — which would make every read here async and ripple
- * into a member list drawn synchronously — the caller hands over something it
- * can read and write without waiting.
- *
- * On the desktop that is `localStorage`. On mobile it is a value held in memory,
- * hydrated once at startup and flushed after a write. Both are ordinary and
- * neither belongs in here.
+ * Synchronous on purpose. An async store would make every read here async and
+ * ripple into a member list that is drawn synchronously — so the caller hands
+ * over `localStorage` on desktop, and a hydrated in-memory value on mobile.
  */
 export interface PeerPinStore {
   read(): Record<string, PeerPin>;
   write(pins: Record<string, PeerPin>): void;
 }
 
-/**
- * What a caller should file these under, offered so the two clients do not pick
- * different keys and quietly stop being the same app.
- */
+/** Shared so the two clients do not pick different storage keys. */
 export const PEER_PINS_KEY = "peerDmKeyPins";
 
 export interface PeerPin {
@@ -70,12 +44,9 @@ export interface PeerPin {
   firstSeenAt: number;
   lastSeenAt: number;
   /**
-   * When these exact keys were compared out of band (GRYT-730).
-   *
-   * Absent until two people have read the code to each other. Not carried
-   * across a change — `pinPeerKey` drops it whenever either half moves, because
-   * a comparison is about the specific keys that were compared and keeping it
-   * would turn the one honest claim here into the lie it exists to prevent.
+   * When these exact keys were compared out of band (GRYT-730). Dropped by
+   * `pinPeerKey` whenever either half moves — carrying it across would turn the
+   * one honest claim here into the lie it exists to prevent.
    */
   comparedAt?: number;
 }
@@ -84,11 +55,8 @@ export type PeerKeyDecision =
   /** They have published nothing. Nothing to encrypt to, and nothing wrong. */
   | { kind: "none" }
   /**
-   * Something arrived and did not check out — a signature that fails, a binding
-   * signed for another server, a shape that is not one at all.
-   *
-   * Not the same as a changed key. This is a server sending something broken
-   * rather than something plausible, and it never becomes a pin.
+   * Something arrived and did not check out. Not the same as a changed key —
+   * this is broken rather than plausible, and it never becomes a pin.
    */
   | { kind: "unusable"; reason: string }
   /** Nobody pinned yet. The caller pins this and carries on. */
@@ -96,12 +64,9 @@ export type PeerKeyDecision =
   /** The same person and the same keys as last time. */
   | { kind: "known"; verified: VerifiedDmKeyBinding; pin: PeerPin }
   /**
-   * Different from what was pinned. Refuse, say so, and let somebody decide.
-   *
-   * `changedIdentity` and `changedKey` are separate because they mean different
-   * things to a person: a new identity key is somebody arriving as a different
-   * account, and a new DM key under the same identity is usually a restored
-   * seed.
+   * Different from what was pinned. Refuse and let somebody decide. The two
+   * flags are separate because a new identity key is a different account, while
+   * a new DM key under the same identity is usually a restored seed.
    */
   | {
       kind: "changed";
@@ -112,11 +77,8 @@ export type PeerKeyDecision =
     };
 
 /**
- * One pin per server and member.
- *
- * A `server_user_id` is already per-server, so the scope is redundant for
- * uniqueness. It is in the key anyway so that forgetting a server forgets the
- * people on it, and so nothing rests on ids from two servers never colliding.
+ * One pin per server and member. The scope is redundant for uniqueness; it is
+ * in the key so that forgetting a server forgets the people on it.
  */
 function pinKey(scope: IdentityScope, memberId: string): string {
   return `${scope} ${memberId}`;
@@ -162,10 +124,8 @@ export function pinPeerKey(
     // person was first seen rather than to when they last changed devices.
     firstSeenAt: existing?.firstSeenAt ?? now,
     lastSeenAt: now,
-    // Dropped the moment either key moves. Somebody who compared a code last
-    // year and whose peer has since arrived with a new key has verified
-    // nothing, and a card still saying "verified" would be worse than one that
-    // never said it.
+    // Dropped the moment either key moves: a card still saying "verified"
+    // against keys nobody compared is worse than one that never said it.
     comparedAt: sameKeys ? existing?.comparedAt : undefined,
   };
 
@@ -175,12 +135,9 @@ export function pinPeerKey(
 }
 
 /**
- * Record that these keys were read out and matched (GRYT-730).
- *
- * Takes the keys it is marking rather than just the member, and refuses if they
- * are not the ones pinned. Between somebody reading a code aloud and pressing
- * the button, a member list can land and change the pin — marking blind would
- * put "verified" against keys nobody ever compared.
+ * Record that these keys were read out and matched (GRYT-730). Takes the keys
+ * and refuses if they are not the pinned ones: a member list can land between
+ * reading a code aloud and pressing the button.
  */
 export function markPeerCompared(
   store: PeerPinStore,
@@ -231,11 +188,9 @@ export function forgetPeerPinsForScope(
 }
 
 /**
- * What to do about the binding this member list carried.
- *
- * Decides and returns. Nothing is written here, including on `first` — the same
- * evaluation runs on every member list, and a function that pinned as a side
- * effect would make `first` mean "since the last render".
+ * What to do about the binding this member list carried. Writes nothing, even
+ * on `first`: this runs on every member list, and pinning as a side effect
+ * would make `first` mean "since the last render".
  */
 export async function evaluatePeerKey({
   store,
