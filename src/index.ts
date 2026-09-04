@@ -34,6 +34,10 @@
  */
 
 export * from "./attachments";
+// Exported because both apps carry their own copy of exactly this, and one of
+// the two is the `btoa` version this file was written to replace. They cannot
+// drop theirs while it is package-internal.
+export * from "./base64";
 export * from "./comparison-code";
 export * from "./conversation-encryption";
 export * from "./dm-key-binding";
