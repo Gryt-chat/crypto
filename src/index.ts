@@ -46,4 +46,5 @@ export * from "./member-keys";
 export * from "./message-keys";
 export * from "./peer-keys";
 export * from "./scope";
+export * from "./seed-words";
 export * from "./thumbprint";

@@ -50,6 +50,7 @@ const MODULES = [
   "message-keys",
   "peer-keys",
   "scope",
+  "seed-words",
   "thumbprint",
 ];
 
