@@ -21,11 +21,7 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
 
-      # Against `dist`, not `src`, because dist is what a client installs, and
-      # the two are not the same file: `add-esm-extensions.mjs` rewrites every
-      # relative specifier on the way out. GRYT-344 shipped a `@gryt/voice` that
-      # tsc was happy with and Node could not load, every import extensionless,
-      # and it got out because the checks ran from `prepublishOnly` — which is
-      # after a pull request has merged and a release is halfway done.
+      # Against `dist`, not `src`: `add-esm-extensions.mjs` rewrites every specifier on the
+      # way out, and GRYT-344 shipped a package tsc liked and Node could not load.
       - name: Check the crypto
         run: npm test

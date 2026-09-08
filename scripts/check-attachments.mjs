@@ -1,20 +1,8 @@
 /* eslint-env node */
 
 /**
- * A file the server stores and cannot read (GRYT-729).
- *
- * The words in a direct message have been unreadable to the server since
- * GRYT-718. The photographs hanging off them were not — an upload went up as
- * itself, was validated, thumbnailed, named and served back to anybody with the
- * link. So a conversation could be private and its pictures public, which is
- * the failure where the text is the part nobody needed.
- *
- * Every case here is one where getting it wrong looks like nothing being wrong.
- * A file that decrypts under the wrong id is the wrong file, drawn without
- * complaint, to somebody who never saw the original. A key that reaches the
- * envelope in the clear is a conversation that reads as encrypted and is not.
- *
- * Against `dist`, because dist is what a client installs.
+ * A file the server stores and cannot read (GRYT-729). Every case here is one where getting
+ * it wrong looks like nothing being wrong. Against `dist`, which is what a client installs.
  */
 
 import assert from "node:assert/strict";
@@ -73,10 +61,8 @@ const read = (sealed, person, conversation = CONVERSATION) =>
   const opened = openAttachment({ ciphertext, conversationId: CONVERSATION, meta });
   assert.deepEqual(Array.from(opened), Array.from(FILE));
 
-  // Generated here rather than supplied. The server assigns the file id in the
-  // response to the upload, by which point the bytes are already encrypted and
-  // sent — so a caller could not have bound to it without choosing the server's
-  // primary key for it.
+  // Generated here rather than supplied: the server assigns the file id in the response to
+  // the upload, by which point the bytes are already encrypted and sent.
   assert.ok(meta.id, "nothing to bind the ciphertext to");
 
   // The size is the plaintext's, so a reader can draw "2.4 MB" without
@@ -108,11 +94,8 @@ const read = (sealed, person, conversation = CONVERSATION) =>
   const first = sealAttachment({ bytes: FILE, conversationId: CONVERSATION });
   const second = sealAttachment({ bytes: FILE, conversationId: CONVERSATION });
 
-  // The case this exists for: a server that swaps two uploads hands a reader a
-  // file that decrypts perfectly and is the wrong one, and the reader never saw
-  // the original. The binding means it fails instead — the metadata for one
-  // file does not open another's bytes even though both are the same file, sent
-  // by the same person, in the same conversation.
+  // The case this exists for: a server that swaps two uploads hands a reader a file that
+  // decrypts perfectly and is the wrong one. The binding makes it fail instead.
   assert.throws(
     () =>
       openAttachment({
@@ -203,9 +186,8 @@ const read = (sealed, person, conversation = CONVERSATION) =>
     attachments: { file_1: first.meta, file_2: second.meta },
   });
 
-  // Swapped by whoever stores the envelope. Without the file id in the wrapping
-  // context this would hand back the wrong key, which then fails at the file —
-  // reading like corruption rather than like tampering.
+  // Swapped by whoever stores the envelope. Without the file id in the wrapping context this
+  // hands back the wrong key, which fails at the file and reads like corruption.
   const tampered = {
     ...sealed,
     files: { file_1: sealed.files.file_2, file_2: sealed.files.file_1 },
@@ -227,9 +209,8 @@ const read = (sealed, person, conversation = CONVERSATION) =>
     recipients: pair,
   });
 
-  // `files` is left off entirely rather than written as `{}`, so every message
-  // sealed before attachments existed is byte-identical to one sealed now and
-  // `check-crypto-vectors.mjs` keeps meaning what it means.
+  // `files` is left off entirely rather than written as `{}`, so a message sealed before
+  // attachments existed is byte-identical to one sealed now.
   assert.equal("files" in sealed, false, "an empty files map changes the envelope");
 
   const opened = await read(sealed, bob);

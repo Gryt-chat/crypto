@@ -1,28 +1,8 @@
 /* eslint-env node */
 
 /**
- * base64url that does not go through the host (GRYT-732).
- *
- * Every module here used to build a string one `String.fromCharCode` at a time
- * and hand it to `btoa`. The mobile app refuses to do that — its `encoding.ts`
- * carries a comment about a byte above `0x7f` and Hermes disagreeing with you
- * about what a binary string is — and this package is supposed to be the one
- * implementation both clients run, so it cannot be the browser-only one.
- *
- * Two things have to hold, and only one of them is obvious.
- *
- * It has to encode every byte the way `btoa` does, because the alternative is
- * every message and every binding already sent becoming unreadable, quietly,
- * for the half of the users on the platform that changed. `check-crypto-vectors`
- * covers the specific bytes that exist; this covers all 256 of them and every
- * length modulo 3, where the padding cases are.
- *
- * And it has to round-trip both spellings. The callers disagreed before they
- * shared a decoder — a binding arrives unpadded in the `-_` alphabet, a wrapped
- * key is written by this package, and `atob` is stricter about padding than the
- * decoder it replaced.
- *
- * `dist`, not `src`, because dist is what a client installs.
+ * base64url that does not go through the host (GRYT-732). It has to encode every byte the
+ * way `btoa` does, or every message already sent becomes unreadable on one platform.
  */
 
 import assert from "node:assert/strict";
@@ -93,9 +73,8 @@ const viaBtoa = (bytes) => {
 /* ── no host base64 is reachable from the built package ─────────────────── */
 
 {
-  // The point of the file is that it does not call these. A reintroduced
-  // `btoa` would pass every assertion above on Node and fail on a phone, which
-  // is the failure this whole exercise is about.
+  // The point of the file is that it does not call these. A reintroduced `btoa` would pass
+  // every assertion above on Node and fail on a phone.
   const { readdirSync, readFileSync } = await import("node:fs");
   const dir = new URL("../dist/", import.meta.url);
 

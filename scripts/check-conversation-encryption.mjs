@@ -1,16 +1,8 @@
 /* eslint-env node */
 
 /**
- * Whether a conversation gets encrypted, and the round trip when it does
- * (GRYT-729).
- *
- * The decision is the dangerous half. Sealing for everybody except the one
- * member who has not published a key leaves that person unable to read a
- * conversation they are in, and the sender is looking at the text they typed so
- * nothing seems wrong. Sealing to a key that changed is the substitution this
- * whole design exists to refuse, arriving at the one moment it costs something.
- *
- * Real WebCrypto and the real curve library. Node 24 strips the types.
+ * Whether a conversation gets encrypted, and the round trip when it does (GRYT-729). The
+ * decision is the dangerous half: a member left out cannot read what they are in.
  */
 
 import assert from "node:assert/strict";
