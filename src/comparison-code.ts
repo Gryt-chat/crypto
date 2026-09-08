@@ -1,20 +1,6 @@
 /**
- * A code two people read to each other (GRYT-730).
- *
- * Everything since GRYT-720 catches a key that *changed*. Nothing can say the
- * first key was ever right, because the server introduced the two people. This
- * is the only way out: compare a short string over something the server is not
- * on, and if it matches neither of you is talking to the server.
- *
- * All four pinned values go in — both thumbprints, both DM keys — sorted, so
- * the two sides compute the same code without agreeing on who is first.
- *
- * It cannot say whose keys they are. A code compared with the wrong person
- * matches perfectly; at some point somebody recognises a voice.
- *
- * Digits rather than words, because `identity-seed.ts` already renders BIP39
- * words for the backup and this must never be mistaken for something worth
- * typing into a box or keeping secret.
+ * A code two people read to each other (GRYT-730). Nothing else can say the first key was
+ * ever right. It cannot say whose keys they are: at some point somebody recognises a voice.
  */
 
 import { sha256 } from "@noble/hashes/sha2.js";
@@ -33,9 +19,8 @@ export interface ComparisonSide {
 }
 
 /**
- * One byte per digit, from a hash that produces 32. Wrapping the digest instead
- * would repeat 28 digits at the end — visibly, so it reads as a bug and invites
- * somebody to stop comparing.
+ * One byte per digit, from a hash that produces 32. Wrapping the digest would repeat 28
+ * digits at the end — visibly, so it reads as a bug and invites somebody to stop.
  */
 function stretch(seed: Uint8Array, count: number): Uint8Array {
   const out = new Uint8Array(count);

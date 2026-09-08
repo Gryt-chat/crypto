@@ -1,10 +1,6 @@
 /**
- * What a member list does to your pins (GRYT-727).
- *
- * The policy over a whole list, and where the mistakes are: pinning on a change
- * instead of a first sighting turns the design off with nothing on screen
- * looking different, and pinning your own row lets a server that rewrites your
- * key have it pinned by you.
+ * What a member list does to your pins (GRYT-727). Pinning on a change rather than a first
+ * sighting turns the design off silently, and pinning your own row lets a server rewrite it.
  */
 
 import { base64Url } from "./base64";
@@ -21,17 +17,15 @@ export interface MemberKeyState {
   /** Whether this row is the person running this client. */
   isSelf: boolean;
   /**
-   * Set only on your own row, when the list disagrees with the key you derived
-   * — this server rewriting it (GRYT-727). Catches only the careless version:
-   * an operator can serve you the truth and everybody else a lie.
+   * Set only on your own row, when the list disagrees with the key you derived — this server
+   * rewriting it (GRYT-727). Catches the careless version only.
    */
   ownKeyRewritten?: boolean;
 }
 
 /**
- * Work out what to do about every binding in a member list. `first` is pinned
- * here; `changed` is returned untouched and never pinned, because a client that
- * re-pinned on its own would throw away the only protection this design has.
+ * Work out what to do about every binding in a member list. `first` is pinned here;
+ * `changed` is returned untouched, because re-pinning throws away the only protection.
  */
 export async function evaluateMemberKeys({
   store,

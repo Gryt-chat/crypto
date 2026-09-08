@@ -1,12 +1,6 @@
 /**
- * base64url, without `btoa` and `atob`.
- *
- * `btoa` is not safe on Hermes: a byte above `0x7f` and the engine's idea of a
- * binary string stops matching yours. This package runs on both clients, so it
- * cannot use the one that works on only one of them.
- *
- * Byte-for-byte identical to what `btoa` produced; `check-crypto-vectors.mjs`
- * holds envelopes from before this file existed and is what says so.
+ * base64url, without `btoa` and `atob`: `btoa` is not safe on Hermes above `0x7f`, and this
+ * package runs on both clients. Byte-identical to what `btoa` produced, and pinned.
  */
 
 const ALPHABET =
