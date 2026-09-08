@@ -1,16 +1,8 @@
 /* eslint-env node */
 
 /**
- * Pinning the people you talk to, and refusing a swap (GRYT-726).
- *
- * Every case here is one where getting it wrong looks like nothing being wrong.
- * A peer who is silently re-pinned after their key changes is a server that
- * swapped a key and got away with it, and the screen says the same thing
- * either way — so the decisions are driven rather than reasoned about, against
- * real WebCrypto and the real curve library.
- *
- * `localStorage` is faked because this module owns storage and the point is
- * what it remembers between calls. Node 24 strips the types on import.
+ * Pinning the people you talk to, and refusing a swap (GRYT-726). Every case here is one
+ * where getting it wrong looks like nothing being wrong, so they are driven, not reasoned.
  */
 
 import assert from "node:assert/strict";
@@ -92,9 +84,8 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
   const first = await decide(binding);
   assert.equal(first.kind, "first");
 
-  // Evaluating twice must still say "first". A function that pinned as a side
-  // effect would make the second answer "known", and then nothing would ever
-  // report a change on a client that evaluates on every member list.
+  // Evaluating twice must still say "first". A function that pinned as a side effect would
+  // answer "known" the second time, and nothing would ever report a change.
   const again = await decide(binding);
   assert.equal(again.kind, "first",
     "evaluating must not pin; the caller decides when to");
@@ -107,9 +98,8 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
 /* ── the same person from a second device ───────────────────────────────── */
 
 {
-  // Same identity key, same seed, so the same binding is produced again. This
-  // is what a phone signing in alongside a laptop looks like, and it must be
-  // silent.
+  // Same identity key, same seed, so the same binding is produced again. This is a phone
+  // signing in alongside a laptop, and it must be silent.
   assert.equal((await decide(await bind())).kind, "known",
     "the same keys arriving again must not read as a change");
 }
@@ -133,10 +123,8 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
   const reseeded = await bind({ dmSeed: 11 });
   const decision = await decide(reseeded);
 
-  // An account holder's identity key is kept while their DM key comes from the
-  // seed, so restoring a different seed lands exactly here. Comparing only the
-  // thumbprint would have called this "known" and encrypted to a key the pin
-  // never saw.
+  // An account holder's identity key is kept while their DM key comes from the seed, so
+  // restoring a different seed lands here. Comparing only the thumbprint would miss it.
   assert.equal(decision.kind, "changed",
     "a new DM key under a known identity is still a change");
   assert.equal(decision.changedIdentity, false);
@@ -212,9 +200,8 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
 /* ── one scope being a prefix of another ────────────────────────────────── */
 
 {
-  // `srv:abc` and `srv:abc123` are both legitimate scopes, and forgetting the
-  // first must not take the second with it. The separator in the storage key is
-  // what stops that, so it is worth an assertion rather than a look.
+  // `srv:abc` and `srv:abc123` are both legitimate scopes, and forgetting the first must not
+  // take the second with it. The separator in the storage key is what stops that.
   const shorter = asIdentityScope("srv:abc");
   const decision = await decide(await bind({ scope: shorter }), shorter);
   pinPeerKey(store, shorter, BOB, decision.verified);

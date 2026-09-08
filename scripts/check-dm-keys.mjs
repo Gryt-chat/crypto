@@ -1,17 +1,8 @@
 /* eslint-env node */
 
 /**
- * The DM keypair, against the real curve library (GRYT-709).
- *
- * Every property below is one the encryption rests on, and none of them fails
- * loudly on its own: a DM key that turned out to equal the identity key, or to
- * be the same on two servers, would encrypt and decrypt perfectly well and
- * quietly give away the thing it was supposed to protect. So they are asserted
- * rather than reasoned about.
- *
- * Runs against `@noble/curves` rather than a stub, because the one thing worth
- * knowing is that two people actually arrive at the same secret. Node 24 strips
- * the types on import.
+ * The DM keypair, against the real curve library (GRYT-709). None of these properties fails
+ * loudly: a key equal to the identity key would encrypt and decrypt perfectly well.
  */
 
 import assert from "node:assert/strict";
@@ -38,10 +29,8 @@ const SEED_A = Uint8Array.from({ length: 32 }, (_, i) => (i * 7 + 3) % 251);
 const SEED_B = Uint8Array.from({ length: 32 }, (_, i) => (i * 11 + 29) % 241);
 
 /*
- * Scopes, not addresses (GRYT-719). `identityScopeFor` gives the server's
- * lineage id, so the key survives the server moving. The type checker enforces
- * that at the call site; this file is JavaScript and only cares that the
- * derivation is keyed on whatever it is handed.
+ * Scopes, not addresses (GRYT-719): `identityScopeFor` gives the lineage id, so the key
+ * survives the server moving. This file is JavaScript and only checks the keying.
  */
 const HOST = "srv:one";
 const OTHER_HOST = "srv:two";
@@ -68,11 +57,8 @@ const OTHER_HOST = "srv:two";
 }
 
 /*
- * The identity derivation, written out rather than imported.
- *
- * It lives in the client and in the mobile app, not in this package, and the
- * property being checked is that the two derivations do not collide. Importing
- * one of them would make this a test of whichever client happened to be nearby.
+ * The identity derivation, written out rather than imported. It lives in the two apps, and
+ * importing one would make this a test of whichever client happened to be nearby.
  */
 function identityScalarFor(seed, scope) {
   const okm = hkdf(sha256, seed, utf8("gryt-identity-v1"), utf8(scope), 48);
@@ -87,9 +73,8 @@ function identityScalarFor(seed, scope) {
   assert.notEqual(hex(dm.privateKey), hex(identityScalarFor(SEED_A, HOST)),
     "deriving both from one label would hand the same bytes to two algorithms");
 
-  /* And specifically: the DM key is not what the identity label produces. The
-     assertion above would pass by luck if the two functions differed only in
-     how they post-process the same HKDF output. */
+  /* And specifically: the DM key is not what the identity label produces. The assertion
+     above would pass by luck if the two differed only in post-processing. */
   const identityLabelled = hkdf(sha256, SEED_A, utf8("gryt-identity-v1"), utf8(HOST), 32);
   assert.notEqual(hex(dm.privateKey), hex(identityLabelled),
     "the DM key must come from its own domain separator");

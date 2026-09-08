@@ -1,15 +1,8 @@
 /* eslint-env node */
 
 /**
- * Saying a DM key is yours, and refusing one that is not (GRYT-720).
- *
- * A binding that verified when it should not is a key the server chose, used to
- * encrypt everything, with a checkmark next to it. Nothing about that looks
- * wrong from the outside, so every way of getting a bad one accepted is checked
- * here rather than reasoned about.
- *
- * Against real WebCrypto, which Node 24 provides globally, and the real curve
- * library. Node strips the types on import.
+ * Saying a DM key is yours, and refusing one that is not (GRYT-720). A binding that verified
+ * when it should not is a key the server chose, with a checkmark next to it.
  */
 
 import assert from "node:assert/strict";
@@ -87,9 +80,8 @@ const encode = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
     SCOPE,
   );
 
-  // Mallory can sign a binding over Alice's public key — it is public. What she
-  // cannot do is make it come back under Alice's thumbprint, which is the only
-  // thing a pin is ever compared against.
+  // Mallory can sign a binding over Alice's public key — it is public. What she cannot do is
+  // make it come back under Alice's thumbprint, which is what a pin is compared against.
   assert.notEqual(mine.identityThumbprint, theirs.identityThumbprint,
     "a binding signed by somebody else must not verify under the first thumbprint");
 }
@@ -170,10 +162,8 @@ const encode = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
   }
 
   /*
-   * Signed properly, over a key of the wrong length. Editing the payload of a
-   * good binding does not test this — it breaks the signature, so verification
-   * fails a step earlier and the length check is never reached. This one has to
-   * survive every other check and be refused on its size.
+   * Signed properly, over a key of the wrong length. Editing a good binding's payload breaks
+   * the signature, so it fails a step earlier and the length check is never reached.
    */
   for (const size of [16, 31, 33, 64]) {
     const wrongSize = await sign({ dmPublicKey: new Uint8Array(size).fill(3) });

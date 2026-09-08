@@ -1,16 +1,8 @@
 /* eslint-env node */
 
 /**
- * A message key wrapped once per member (GRYT-718).
- *
- * Every property here is one somebody's privacy rests on, and almost none of
- * them fails loudly. A message that stayed readable by a person who left, or a
- * ciphertext that could be replayed into another conversation, encrypts and
- * decrypts perfectly well while giving away the thing it exists to protect. So
- * they are asserted against the real WebCrypto and the real curve library
- * rather than reasoned about.
- *
- * Node 24 strips the types on import and provides `crypto.subtle` globally.
+ * A message key wrapped once per member (GRYT-718). Almost none of these fails loudly: a
+ * message readable by somebody who left encrypts and decrypts perfectly well.
  */
 
 import assert from "node:assert/strict";
@@ -71,9 +63,8 @@ const seal = (plaintext, recipients = group, sender = alice, conversation = CONV
 }
 
 /**
- * The sender specifically, because this is the one that looks fine while
- * broken: they are looking at the text they typed, so a client shows the right
- * thing on the way out and nothing on the way back.
+ * The sender specifically, because this is the one that looks fine while broken: they are
+ * looking at the text they typed, so the way out is right and the way back is not.
  */
 {
   const sealed = await seal("can I read my own message");
@@ -157,14 +148,8 @@ const seal = (plaintext, recipients = group, sender = alice, conversation = CONV
     "the same wrapped key twice means the content key is not random per message");
 
   /*
-   * And the wrapped bytes differing is not enough on its own — the wrapping IV
-   * is random, so a fixed content key still produces different-looking wraps.
-   * What has to be true is that one message's key does not open another's body.
-   *
-   * The wrap is bound to conversation, sender and member, all identical across
-   * these two, so lifting the first message's wrapped key into the second's
-   * envelope unwraps cleanly. If the content key were shared, the body would
-   * then open. It must not.
+   * The wrapped bytes differing is not enough: the wrapping IV is random. What has to be
+   * true is that one message's key does not open another's body.
    */
   await assert.rejects(
     read({ ...second, keys: first.keys }, bob),
@@ -172,10 +157,8 @@ const seal = (plaintext, recipients = group, sender = alice, conversation = CONV
   );
 
   /*
-   * IVs. Every message to bob is wrapped under the same secret, because
-   * dmSharedSecret is deterministic for a conversation — so a repeated wrapping
-   * IV is nonce reuse under a fixed key, which is the one way to break AES-GCM
-   * outright rather than degrade it.
+   * IVs. Every message to bob is wrapped under the same secret, so a repeated wrapping IV is
+   * nonce reuse under a fixed key — the one way to break AES-GCM outright.
    */
   assert.notEqual(first.iv, second.iv, "the body IV repeated across two messages");
   assert.notEqual(first.keys[bob.id].iv, second.keys[bob.id].iv,
@@ -194,14 +177,8 @@ const seal = (plaintext, recipients = group, sender = alice, conversation = CONV
 /* ── the mistakes a caller can make are refused, not shipped ────────────── */
 
 /*
- * Matched on the message rather than just "it threw". Each of these has another
- * guard that would also refuse it — an empty recipient list contains no sender
- * either — so a bare `rejects` passes with the guard under test deleted, and
- * says the wrong thing to whoever hits it.
- *
- * `assert.rejects` takes its second argument as the matcher only when it is a
- * RegExp, a class or a function. A plain string there is the assertion's own
- * message and matches nothing, which is the shape this originally had.
+ * Matched on the message rather than just "it threw": each of these has another guard that
+ * would also refuse it, so a bare `rejects` passes with the guard under test deleted.
  */
 {
   await assert.rejects(seal("nobody", []), /no recipients/,

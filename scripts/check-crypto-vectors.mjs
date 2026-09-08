@@ -1,16 +1,8 @@
 /* eslint-env node */
 
 /**
- * Messages sealed by the WebCrypto build still open (GRYT-733).
- *
- * These bytes were produced by `message-keys.ts` and `dm-key-binding.ts` as they
- * were on main before this file existed, using `crypto.subtle`. Nothing here
- * regenerates them — that is the entire point. A conversion that quietly changed
- * the envelope would leave every message already sent unreadable, and nobody
- * finds out until they scroll back.
- *
- * If one of these fails, the format moved. Do not update a vector to make it
- * pass.
+ * Messages sealed by the WebCrypto build still open (GRYT-733). Nothing here regenerates
+ * these bytes — that is the point. If one fails, the format moved: do not update a vector.
  */
 
 import assert from "node:assert/strict";
@@ -67,13 +59,8 @@ const BINDING =
 
 {
   /*
-   * The other half of compatibility, and the half a vector cannot check.
-   *
-   * Opening reads the nonce length out of the envelope, so a change to what
-   * this build *writes* leaves every vector above passing while every message
-   * it sends becomes unopenable by an older client. The numbers are asserted
-   * against the format rather than against a constant, so moving the constant
-   * fails here.
+   * The other half of compatibility, which a vector cannot check: opening reads the nonce
+   * length out of the envelope, so a change to what this build writes passes every vector.
    */
   const { sealMessage } = await import("../dist/index.js");
   const alice = deriveDmKeyPair(seed(3), SCOPE);
@@ -129,11 +116,8 @@ const BINDING =
 
 {
   /*
-   * The vector above happens to have a high `s`, and finding that was luck.
-   * ECDSA has two valid signatures per message and WebCrypto does not normalise
-   * to the low one; noble refuses the high one unless told not to. So roughly
-   * half of all bindings would have failed, at random, while the other half
-   * worked — which is why this signs a batch rather than trusting one sample.
+   * The vector above happens to have a high `s`, and finding that was luck. WebCrypto does
+   * not normalise and noble refuses high `s`, so this signs a batch rather than one sample.
    */
   const { p256 } = await import("@noble/curves/nist.js");
   const { signDmKeyBinding } = await import("../dist/index.js");
