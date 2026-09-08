@@ -1,25 +1,6 @@
 /**
- * One key per message, wrapped once per member (GRYT-718).
- *
- * A random content key per message, encrypted once for each member with the
- * secret `dm-keys.ts` shares with that member. No group ratchet, no key
- * agreement between members, nothing kept between messages.
- *
- * Somebody added later has no wrapped key in any earlier message, so those stay
- * unreadable to them — nothing enforces that, there is simply nothing for them
- * to open. Removing somebody does not take back what they could already read.
- *
- * **Not authenticated as coming from the sender.** Every member holds the
- * content key, so any of them could produce a message the others decrypt
- * happily. Saying who wrote it is a signature with the identity key, and that
- * is not here yet.
- *
- * **Not end-to-end against the server, yet.** Wrapping to a public key is worth
- * something only if the key belongs to who you think. Until a peer can check
- * the GRYT-709 certificate itself, a caller is trusting the server for that.
- *
- * **Not private about who is in the conversation.** Wrapped keys are listed by
- * member id, so a sealed message names its own recipients.
+ * One key per message, wrapped once per member (GRYT-718). Not authenticated as coming from
+ * the sender, not end-to-end against the server yet, and not private about who is in it.
  */
 import { gcm } from "@noble/ciphers/aes.js";
 
@@ -53,11 +34,8 @@ export interface SealedMessage {
   /** Member id to that member's wrapped copy of the content key. */
   keys: Record<string, WrappedKey>;
   /**
-   * File id to that file's key and real metadata, encrypted (GRYT-729).
-   *
-   * Nothing here plus a message carrying `attachments` means those files went
-   * up in the clear. Encrypted under the content key rather than wrapped per
-   * member, since the content key is already wrapped per member.
+   * File id to that file's key and real metadata, encrypted (GRYT-729). Nothing here plus a
+   * message carrying `attachments` means those files went up in the clear.
    */
   files?: Record<string, SealedFileKey>;
 }
@@ -70,9 +48,8 @@ export interface SealedFileKey {
 }
 
 /**
- * `attachments` is deliberately not optional. A caller that forgets it draws a
- * conversation where files silently do not appear; an empty object at least
- * makes the loop over it run.
+ * `attachments` is deliberately not optional: a caller that forgets it draws a conversation
+ * where files silently do not appear.
  */
 export interface OpenedMessage {
   text: string;
@@ -93,20 +70,16 @@ function randomBytes(length: number): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * AES-256-GCM from a library, not `crypto.subtle`, which React Native does not
- * have (GRYT-733). The bytes match what WebCrypto produced — 12-byte nonce,
- * 16-byte tag appended, AAD authenticated not encrypted — so everything sealed
- * before this change still opens.
+ * AES-256-GCM from a library, not `crypto.subtle`, which React Native lacks (GRYT-733). The
+ * bytes match WebCrypto's, so everything sealed before this change still opens.
  */
 function aesGcm(key: Uint8Array, iv: Uint8Array, aad: Uint8Array) {
   return gcm(key as Uint8Array<ArrayBuffer>, iv as Uint8Array<ArrayBuffer>, aad as Uint8Array<ArrayBuffer>);
 }
 
 /**
- * Binds the body to its conversation and sender, so a message lifted out of one
- * conversation and posted into another does not open — without it the same pair
- * talking in two conversations could have a message replayed between them. The
- * sender field is not a signature; it only stops the lazy relabelling.
+ * Binds the body to its conversation and sender, so a message lifted into another
+ * conversation does not open. The sender field is not a signature.
  */
 function bodyContext(conversationId: string, sender: string): Uint8Array<ArrayBuffer> {
   return new TextEncoder().encode(
@@ -140,12 +113,8 @@ function wrapContext(
 }
 
 /**
- * Encrypt a message and wrap its key for everybody who should read it.
- *
- * `recipients` is the whole membership, **including the sender**. Leaving the
- * sender out compiles, sends, and produces a conversation the sender cannot
- * read back — invisible while sending, since they see the text they typed. So
- * it is checked here rather than left to every caller.
+ * Encrypt a message and wrap its key for everybody who should read it. `recipients` is the
+ * whole membership, including the sender — leaving them out sends a message they cannot read.
  */
 export async function sealMessage({
   plaintext,
@@ -237,11 +206,8 @@ export async function sealMessage({
 }
 
 /**
- * Read a message, if this member has a key for it.
- *
- * Null when there is no wrapped key for `memberId` — a late joiner, which is
- * ordinary and should be drawn honestly. A key that is present and does not
- * open throws instead: that means tampering or the wrong keys.
+ * Read a message, if this member has a key for it. Null for a late joiner, which is ordinary;
+ * a key that is present and does not open throws, because that means tampering.
  */
 export async function openMessage({
   sealed,
