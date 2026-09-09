@@ -1,20 +1,6 @@
 /**
- * The one thing GRYT-719 changed, asserted where a type checker can see it.
- *
- * `deriveDmKeyPair(seed, host)` and `deriveDmKeyPair(seed, scope)` are the same
- * call to read, and the difference only shows up when somebody's server changes
- * address — at which point every message encrypted to the old key is unreadable
- * and nothing says why. So the brand exists, and this is what proves it is still
- * doing its job.
- *
- * `@ts-expect-error` is the assertion. If `IdentityScope` ever collapses back to
- * `string`, these lines stop erroring, `tsc` reports the directive as unused,
- * and `npm run typecheck` fails. There is no runtime here to check:
- * `scripts/check-dm-keys.mjs` cannot see a type.
- *
- * Outside `src` so it is typechecked and never built. It moved here from the
- * client in GRYT-732, along with the brand it is about. The client keeps its own
- * copy for `deriveLocalKeyPair`, which stayed there.
+ * The one thing GRYT-719 changed, asserted where a type checker can see it. `@ts-expect-error`
+ * is the assertion: if `IdentityScope` collapses to `string`, `tsc` reports it unused.
  */
 
 import { deriveDmKeyPair, dmPublicKey } from "../src/dm-keys";

@@ -1,21 +1,8 @@
 /* eslint-env node */
 
 /**
- * What a member list does to your pins (GRYT-727).
- *
- * `peer-keys.ts` decides; this is the policy on top of it, and the policy is
- * where the mistakes are. Pinning on a change instead of on a first sighting
- * turns the whole design off and nothing on screen looks different. Pinning
- * your own row means a server that rewrites your key gets it pinned by you.
- * Neither fails loudly, so both are driven here.
- *
- * The policy is imported rather than restated. It lived in the socket package
- * behind a Vite alias at first, which Node cannot resolve, and checking it there
- * meant writing it out again here — where it would have drifted from the app
- * quietly and gone on passing. It moved to `common/auth` for that reason.
- *
- * Real WebCrypto, the real curve library, a faked `localStorage`. Node 24
- * strips the types on import.
+ * What a member list does to your pins (GRYT-727). Pinning on a change rather than a first
+ * sighting turns the design off silently, and pinning your own row lets a server rewrite it.
  */
 
 import assert from "node:assert/strict";

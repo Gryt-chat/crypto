@@ -1,21 +1,6 @@
 /**
- * Saying that a DM key and an identity key belong to the same person (GRYT-720).
- *
- * A short JWT, signed by the per-server identity key: "this DM public key is
- * mine, on this server". Without it a server that wanted to read a conversation
- * could give each side its own key and relay.
- *
- * It proves that whoever holds the identity key also chose this DM key, and
- * **not** whose identity key it is — the public half rides in the header, so a
- * server can mint a keypair and sign a valid binding with it. What it buys is
- * that the two keys become one thing to substitute instead of two, and the
- * identity key is the one the server challenged at join. The caller pins
- * {@link VerifiedDmKeyBinding.identityThumbprint}; that is the part that means
- * something, and `server-pins.ts` does the same three moves for server keys.
- *
- * The key lives inside the signed statement rather than beside it, so a server
- * cannot serve one person's key with another's signature. It is read out after
- * the signature verifies or not at all.
+ * Saying that a DM key and an identity key belong to the same person (GRYT-720). It proves
+ * the identity key chose this DM key, not whose identity key it is — pin the thumbprint.
  */
 
 import { p256 } from "@noble/curves/nist.js";
@@ -26,12 +11,8 @@ import { asIdentityScope, type IdentityScope } from "./scope";
 import { jwkThumbprint } from "./thumbprint";
 
 /**
- * The `iss` a binding carries.
- *
- * Constant rather than the signer's own id, because a binding is not addressed
- * to a server and has no subject to name. What it is *for* is the thing worth
- * writing down, so a JWT that arrives on this path and says something else is
- * refused rather than read hopefully.
+ * The `iss` a binding carries: constant rather than the signer's id, because a binding is
+ * not addressed to a server. A JWT on this path saying something else is refused.
  */
 const BINDING_ISSUER = "gryt:dm-key";
 
@@ -39,10 +20,8 @@ export interface VerifiedDmKeyBinding {
   /** The X25519 public key, raw bytes, once the signature has been checked. */
   dmPublicKey: Uint8Array<ArrayBuffer>;
   /**
-   * The identity key that signed this, as a JWK thumbprint.
-   *
-   * **This is the thing to pin.** Everything else in here is a statement by
-   * whoever holds that key, and is worth exactly what the key is worth.
+   * The identity key that signed this, as a JWK thumbprint. This is the thing to pin:
+   * everything else here is a statement by whoever holds that key.
    */
   identityThumbprint: string;
   /** The scope the binding claims, already checked against the expected one. */
@@ -78,9 +57,8 @@ function utf8(value: string): Uint8Array<ArrayBuffer> {
 }
 
 /**
- * Sign the statement. No expiry: the DM key does not roll, and an expiry a
- * client cannot renew offline would make old messages unreadable for a reason
- * that has nothing to do with anybody's keys.
+ * Sign the statement. No expiry: the DM key does not roll, and one a client cannot renew
+ * offline would make old messages unreadable for no reason to do with keys.
  */
 export async function signDmKeyBinding({
   dmPublicKey,
@@ -132,12 +110,8 @@ export async function signDmKeyBinding({
 }
 
 /**
- * Check a binding. Throws on anything wrong rather than returning something
- * partly checked.
- *
- * `expectedScope` is required: without it a binding signed for one server can
- * be replayed by another, which is the cheapest attack available to an operator
- * who can see a member list.
+ * Check a binding, throwing on anything wrong. `expectedScope` is required: without it a
+ * binding signed for one server can be replayed by another.
  */
 export async function verifyDmKeyBinding(
   binding: string,
@@ -183,9 +157,8 @@ export async function verifyDmKeyBinding(
   }
 
   /*
-   * Curve library, not `crypto.subtle`, which React Native lacks (GRYT-733).
-   * Same bytes either way: ES256 is P-256 over SHA-256 with a raw 64-byte
-   * `r || s`.
+   * Curve library, not `crypto.subtle`, which React Native lacks (GRYT-733). Same bytes:
+   * ES256 is P-256 over SHA-256 with a raw 64-byte `r || s`.
    */
   const publicKey = jwkToPoint(jwk as Record<string, unknown>);
   const signature = base64UrlDecode(parts[2]);
@@ -194,10 +167,8 @@ export async function verifyDmKeyBinding(
   }
 
   /*
-   * `lowS: false` is not a relaxation. Noble refuses high-`s` signatures by
-   * default for blockchain replay reasons that do not apply here, WebCrypto
-   * does not normalise, and about half of all ES256 signatures come out high —
-   * so the default would reject half of every client's bindings at random.
+   * `lowS: false` is not a relaxation. Noble refuses high-`s` by default for blockchain
+   * reasons; about half of all ES256 signatures are high, so the default rejects half.
    */
   const ok = p256.verify(
     signature,

@@ -6,14 +6,8 @@ import {
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 
 /**
- * The identity seed as 24 words, and back. A phrase written down on one client
- * has to restore on the other, so there is one implementation.
- *
- * The checksum lives inside the words, so a mistyped or reordered phrase is
- * rejected rather than quietly producing a different identity.
- *
- * Only the encoding is borrowed from wallets — no key stretching. These 256
- * bits are the seed already, not a passphrase to grind into one.
+ * The identity seed as 24 words, and back, with the checksum inside the words. Only the
+ * encoding is borrowed from wallets: these 256 bits are the seed, not a passphrase.
  */
 
 /** Length of the seed every local identity is calculated from. */

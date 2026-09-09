@@ -1,17 +1,8 @@
 /* eslint-env node */
 
 /**
- * The code two people read to each other (GRYT-730).
- *
- * This is the last check standing between somebody and a server that put itself
- * in the middle from the first message, and every way of getting it wrong is
- * quiet. A code that ignores half its input matches while the keys differ. A
- * code that depends on argument order never matches even when everything is
- * fine, which teaches people the check is broken and to skip it. A "verified"
- * mark that survives a key change says the wrong thing at exactly the moment it
- * matters most.
- *
- * `localStorage` is faked for the pin half. Node 24 strips the types.
+ * The code two people read to each other (GRYT-730) — the last check standing between
+ * somebody and a server in the middle, and every way of getting it wrong is quiet.
  */
 
 import assert from "node:assert/strict";
@@ -49,9 +40,8 @@ const digitsOnly = (code) => code.replace(/ /g, "");
 /* ── both sides compute the same string ─────────────────────────────────── */
 
 {
-  // The point of sorting. Alice runs it with herself first and Bob runs it with
-  // himself first; if these differed, two honest people would read out
-  // different codes and conclude they were being attacked.
+  // The point of sorting. Alice runs it with herself first and Bob with himself first; if
+  // these differed, two honest people would read out different codes.
   assert.equal(comparisonCode(alice, bob), comparisonCode(bob, alice),
     "the code must not depend on who computes it");
 }
@@ -69,9 +59,8 @@ const digitsOnly = (code) => code.replace(/ /g, "");
     "even groups, so somebody can keep their place halfway down a phone call",
   );
 
-  // Never words. The identity backup is 24 words from the BIP39 list, and a
-  // second set of words on a card beside it reads as another recovery phrase —
-  // something to keep secret and type into a box, which this is the opposite of.
+  // Never words. The identity backup is 24 BIP39 words, and a second set on a card beside it
+  // reads as another recovery phrase — something to keep secret, which this is not.
   assert.ok(!/[a-z]/i.test(code), `"${code}" contains letters`);
 }
 
@@ -101,10 +90,8 @@ const digitsOnly = (code) => code.replace(/ /g, "");
 
 {
   /*
-   * This one found a real flaw. Joining a thumbprint and a key on ":" makes
-   * ("a", "b:c") and ("a:b", "c") the same string, so two different pairs of
-   * keys got the same code. Neither field contains a colon today, so it was
-   * unreachable — and unreachable until somebody changes what goes in here.
+   * This one found a real flaw. Joining on ":" makes ("a", "b:c") and ("a:b", "c") the same
+   * string. Neither field contains a colon today, so it was unreachable until it is not.
    */
   assert.notEqual(
     comparisonCode({ thumbprint: "a", dmPublicKey: "b:c" }, { thumbprint: "d", dmPublicKey: "e" }),
@@ -123,10 +110,8 @@ const digitsOnly = (code) => code.replace(/ /g, "");
 
 {
   /*
-   * Also found a real flaw. SHA-256 gives 32 bytes and the code wants 60
-   * digits; taking `bytes[i % 32]` repeats digits 0 to 27 at the end, which
-   * halves what the code distinguishes and prints a visible run — a code that
-   * looks broken is one people stop reading out.
+   * Also found a real flaw. SHA-256 gives 32 bytes and the code wants 60 digits, so
+   * `bytes[i % 32]` repeats digits 0 to 27 and prints a visible run.
    */
   const digits = digitsOnly(comparisonCode(alice, bob));
   const half = COMPARISON_CODE_DIGITS - 32;
@@ -168,9 +153,8 @@ const verified = (dm) => ({
 }
 
 {
-  // Between reading a code aloud and pressing the button, a member list can land
-  // and move the pin. Marking blind would put "verified" against keys nobody
-  // ever compared.
+  // Between reading a code aloud and pressing the button, a member list can land and move
+  // the pin. Marking blind would put "verified" against keys nobody compared.
   assert.equal(
     markPeerCompared(store, SCOPE, BOB, { thumbprint: "tp-bob", dmPublicKey: "not-what-is-pinned" }),
     false,

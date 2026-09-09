@@ -1,21 +1,8 @@
 /* eslint-env node */
 
 /**
- * Every module is reachable on its own, not only through the barrel (GRYT-732).
- *
- * The client imports these by subpath rather than as `export * from
- * "@gryt/crypto"`, because its own `peer-keys` exports the same names as this
- * package's with the store already supplied. Two star exports of one name is
- * ambiguous and TypeScript drops the name instead of complaining, so the client
- * takes seven subpaths and leaves the eighth alone.
- *
- * That makes a file name here part of the published surface. Renaming
- * `dm-keys.ts` compiles, passes every other check, publishes, and breaks the
- * client's barrel on install — which is a long way from the rename.
- *
- * Against `dist`, because the `exports` map points there and a wildcard that
- * resolves in the source tree and not in the tarball is the failure worth
- * catching.
+ * Every module is reachable on its own, not only through the barrel (GRYT-732), so a file
+ * name here is published surface. Against `dist`, because the `exports` map points there.
  */
 
 import assert from "node:assert/strict";
@@ -29,9 +16,8 @@ assert.deepEqual(
   "the wildcard subpath is what the client's barrel resolves through",
 );
 
-// The wildcard swallows this otherwise, resolving `@gryt/crypto/package.json`
-// to `dist/package.json.js` and failing. Metro, expo-doctor and most bundlers
-// read a dependency's manifest that way, so it has to keep working.
+// The wildcard swallows this otherwise, resolving `@gryt/crypto/package.json` to
+// `dist/package.json.js`. Metro and most bundlers read a manifest that way.
 assert.equal(
   pkg.exports["./package.json"],
   "./package.json",

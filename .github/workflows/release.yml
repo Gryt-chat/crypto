@@ -1,10 +1,7 @@
 name: Release
 
-# Dispatched, not automatic. @gryt/ui publishes through changesets on every push
-# to main, which suits a package with a changeset per PR; this one has no
-# changesets, one maintainer, and a consumer that pins a version deliberately.
-# So it works the way Release Client and Release Server already do — you pick it
-# when you mean it.
+# Dispatched, not automatic. This package has no changesets, one maintainer, and consumers
+# that pin a version deliberately, so it works the way Release Client already does.
 
 on:
   workflow_dispatch:
@@ -20,10 +17,8 @@ on:
         type: choice
         options: [latest, beta, next]
 
-# Two dispatches at once is how 0.1.0-beta.6 ended up on npm with no commit
-# behind it: both runs published, and the slower one then failed to push because
-# the faster had already moved main. Releases queue instead of racing, and are
-# never cancelled, because cancelling one mid-publish is worse than waiting.
+# Two dispatches at once is how 0.1.0-beta.6 reached npm with no commit behind it. Releases
+# queue instead of racing, and are never cancelled: cancelling mid-publish is worse.
 concurrency:
   group: release
   cancel-in-progress: false
@@ -57,18 +52,8 @@ jobs:
 
       - run: npm run build
 
-      # GRYT-344 shipped a package tsc was happy with and Node could not load at
-      # all — every relative import in dist was extensionless, which only a
-      # bundler tolerates. It was caught by someone trying it by hand, so that
-      # attempt is a step now. This runs against the real dist, before anything
-      # is published.
-      # GRYT-344 shipped a package tsc was happy with and Node could not load at
-      # all. This loads the real dist and checks the whole surface the client
-      # imports, rather than the five names the first version of this step
-      # asserted — which passed while four exports were missing.
-      # Against `dist`, which is what is about to be published — and not the
-      # same thing as `src`, since `add-esm-extensions.mjs` rewrites every
-      # specifier on the way out.
+      # Against the real dist, before anything is published: `add-esm-extensions.mjs`
+      # rewrites every specifier, and GRYT-344 shipped a package Node could not load.
       - name: Check the crypto
         run: npm test
 
@@ -87,9 +72,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -am "release: v${{ steps.version.outputs.version }} [skip ci]"
 
-          # Annotated, because --follow-tags ignores lightweight tags. The
-          # workflow tagged every release from 0.1.0-beta.1 onwards and pushed
-          # none of them, silently, because of that one flag.
+          # Annotated, because --follow-tags ignores lightweight tags. Every release from
+          # 0.1.0-beta.1 was tagged and never pushed, silently, because of that flag.
           git tag -a "v${{ steps.version.outputs.version }}" \
             -m "v${{ steps.version.outputs.version }}"
 

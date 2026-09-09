@@ -1,19 +1,6 @@
 /**
- * Trust-on-first-use pinning of the people you talk to (GRYT-726).
- *
- * A binding is worth something because the same one keeps arriving. This is
- * what remembers. Same three moves `server-pins.ts` has made for servers since
- * GRYT-51 — record on first sight, notice a change, refuse it — with separate
- * storage, since forgetting a server should not forget the people on it.
- *
- * **There is no automatic re-pin.** A change is reported and stays reported
- * until somebody decides, because a restored seed and a substituted key look
- * identical from here and only one is the person's own doing.
- *
- * Both halves are compared. An identity key is generated once and kept while a
- * DM key is derived from the seed, so somebody restoring a different seed
- * arrives with the same thumbprint and a new DM key. Comparing one leaves a
- * hole in whichever direction is left out.
+ * Trust-on-first-use pinning of the people you talk to (GRYT-726). There is no automatic
+ * re-pin, and both halves are compared: a restored seed and a substituted key look alike.
  */
 
 import { base64Url } from "./base64";
@@ -24,9 +11,8 @@ import {
 import type { IdentityScope } from "./scope";
 
 /**
- * Synchronous on purpose. An async store would make every read here async and
- * ripple into a member list that is drawn synchronously — so the caller hands
- * over `localStorage` on desktop, and a hydrated in-memory value on mobile.
+ * Synchronous on purpose: an async store would make every read here async and ripple into a
+ * member list that is drawn synchronously.
  */
 export interface PeerPinStore {
   read(): Record<string, PeerPin>;
@@ -44,9 +30,8 @@ export interface PeerPin {
   firstSeenAt: number;
   lastSeenAt: number;
   /**
-   * When these exact keys were compared out of band (GRYT-730). Dropped by
-   * `pinPeerKey` whenever either half moves — carrying it across would turn the
-   * one honest claim here into the lie it exists to prevent.
+   * When these exact keys were compared out of band (GRYT-730). Dropped whenever either half
+   * moves — carrying it across would turn the one honest claim here into a lie.
    */
   comparedAt?: number;
 }
@@ -64,9 +49,8 @@ export type PeerKeyDecision =
   /** The same person and the same keys as last time. */
   | { kind: "known"; verified: VerifiedDmKeyBinding; pin: PeerPin }
   /**
-   * Different from what was pinned. Refuse and let somebody decide. The two
-   * flags are separate because a new identity key is a different account, while
-   * a new DM key under the same identity is usually a restored seed.
+   * Different from what was pinned. Refuse and let somebody decide. Separate flags: a new
+   * identity key is a different account, a new DM key is usually a restored seed.
    */
   | {
       kind: "changed";
@@ -97,10 +81,8 @@ export function getPeerPin(
 }
 
 /**
- * Record what this member's keys are, from here on.
- *
- * Called on a `first` decision, and on a `changed` one only after somebody has
- * said to. Nothing calls it on `changed` by itself, which is the whole point.
+ * Record what this member's keys are, from here on. Called on `first`, and on `changed` only
+ * after somebody has said to. Nothing calls it on `changed` by itself.
  */
 export function pinPeerKey(
   store: PeerPinStore,
@@ -135,9 +117,8 @@ export function pinPeerKey(
 }
 
 /**
- * Record that these keys were read out and matched (GRYT-730). Takes the keys
- * and refuses if they are not the pinned ones: a member list can land between
- * reading a code aloud and pressing the button.
+ * Record that these keys were read out and matched (GRYT-730). Takes the keys and refuses if
+ * they are not the pinned ones: a member list can land mid-comparison.
  */
 export function markPeerCompared(
   store: PeerPinStore,
@@ -188,9 +169,8 @@ export function forgetPeerPinsForScope(
 }
 
 /**
- * What to do about the binding this member list carried. Writes nothing, even
- * on `first`: this runs on every member list, and pinning as a side effect
- * would make `first` mean "since the last render".
+ * What to do about the binding this member list carried. Writes nothing, even on `first`:
+ * pinning as a side effect would make `first` mean "since the last render".
  */
 export async function evaluatePeerKey({
   store,

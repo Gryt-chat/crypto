@@ -1,11 +1,5 @@
-// The 24-word backup. What matters is not that it round-trips but that it is
-// the *same* encoding both apps already shipped: a phrase written down on the
-// desktop has to restore on the phone, and a change here that round-trips
-// perfectly against itself would still strand every backup ever written.
-//
-// So the fixed vectors below are the anchor. They were produced by the code the
-// two apps carried before this module existed, and if this file stops agreeing
-// with them it has broken every phrase already on paper.
+// The 24-word backup. What matters is that it is the same encoding both apps already
+// shipped: a change that round-trips against itself would strand every backup on paper.
 import assert from "node:assert/strict";
 
 const { seedToWords, wordsToSeed, assertUsableSeed, SEED_BYTES, BACKUP_WORDS } =
@@ -14,10 +8,8 @@ const { seedToWords, wordsToSeed, assertUsableSeed, SEED_BYTES, BACKUP_WORDS } =
 assert.equal(SEED_BYTES, 32);
 assert.equal(BACKUP_WORDS, 24);
 
-// A seed of 0x00..0x1f. Confirmed against the client's own installed
-// @scure/bip39 before this module existed, so it is what a backup written on
-// either app already says. Here as a literal so this file cannot drift along
-// with the code it is checking.
+// A seed of 0x00..0x1f, confirmed against the client's own @scure/bip39 before this module
+// existed. A literal, so this file cannot drift along with the code it checks.
 const VECTORS = [
   {
     seed: Uint8Array.from({ length: 32 }, (_, i) => i),

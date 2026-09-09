@@ -1,17 +1,6 @@
 /**
- * Whether a conversation can be encrypted, and doing it (GRYT-729).
- *
- * A decision rather than a capability check: it can say no, and when it does
- * the answer has to reach the person about to press send.
- *
- * Every member or nobody. Sealing for the rest would leave one member unable to
- * read a conversation they are in, silently. A member whose key *changed*
- * counts as not having one — the GRYT-726 refusal arriving where it matters.
- *
- * {@link SealDecision} carries who is missing and why. A composer that quietly
- * sends in the clear because somebody has not updated is the exact failure this
- * design exists to avoid, and it is invisible: the message sends and reads
- * normally.
+ * Whether a conversation can be encrypted, and doing it (GRYT-729). Every member or nobody,
+ * and a member whose key changed counts as not having one. The answer has to reach the sender.
  */
 
 import type { SealedAttachmentKey } from "./attachments";
@@ -106,9 +95,8 @@ export async function sealForConversation({
   senderKeys: { privateKey: Uint8Array; publicKey: Uint8Array };
   decision: SealDecision;
   /**
-   * File id to what `sealAttachment` returned (GRYT-729). Encrypt files *after*
-   * checking `decision.kind` — an unsealable conversation returns null here,
-   * and already-uploaded files would then be ones nobody can open.
+   * File id to what `sealAttachment` returned (GRYT-729). Encrypt files after checking
+   * `decision.kind`: an unsealable conversation returns null, and uploads would be orphaned.
    */
   attachments?: Record<string, SealedAttachmentKey>;
 }): Promise<string | null> {
@@ -126,9 +114,8 @@ export async function sealForConversation({
 }
 
 /**
- * Read one back. Null for a late joiner, which a client draws as a message it
- * cannot read. Anything else throws: a key present and not opening means
- * tampering, and an empty bubble would hide it.
+ * Read one back. Null for a late joiner, which a client draws as unreadable. Anything else
+ * throws: a key present and not opening means tampering, and an empty bubble hides it.
  */
 export async function openForConversation({
   sealed,
