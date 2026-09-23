@@ -68,6 +68,8 @@ and is not pretended at.
 **Forward secret.** A message key comes from the seed and never moves, so a seed
 that leaks reads every message ever sent to it. Signal and Matrix ratchet; this
 does not. That is GRYT-754 and it is a different protocol rather than a setting.
+[`docs/message-security.md`](docs/message-security.md) is the design covering it,
+along with where the seed is stored and how it reaches a second device.
 
 **A cryptography library.** The primitives are `@noble/curves`,
 `@noble/hashes` and `@noble/ciphers`. This is the composition of them.
