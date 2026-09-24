@@ -32,12 +32,15 @@ const MODULES = [
   "conversation-encryption",
   "dm-key-binding",
   "dm-keys",
+  "identity-vault",
   "member-keys",
   "message-keys",
   "peer-keys",
+  "recovery-key",
   "scope",
   "seed-words",
   "thumbprint",
+  "vault-password",
 ];
 
 const barrel = await import("../dist/index.js");

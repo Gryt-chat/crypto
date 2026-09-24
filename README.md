@@ -29,6 +29,13 @@ either way.
 - **`comparison-code`** — sixty digits two people read to each other.
 - **`attachments`** — a key per file, bound so one file’s bytes cannot be served
   as another’s, with the key inside the sealed message.
+- **`identity-vault`** — the 24 words, sealed so your account can carry them to
+  a new device. Argon2id over the password, and an optional recovery key that
+  opens it on its own. Bundles sealed the old way, with PBKDF2, still open.
+- **`recovery-key`** — that key as 52 characters you can write down without
+  mixing up 0 and O.
+- **`vault-password`** — six random words, and the 12-character floor for a
+  password you type yourself.
 
 ## Importing it
 
@@ -56,9 +63,13 @@ bytes above `0x7f`, so `base64.ts` does it from the alphabet up. No storage —
 pins go through a `PeerPinStore` the caller supplies. No network, no React, no
 config.
 
-Two exceptions, named where they are: `crypto.getRandomValues`, which every
-target has, and signing a binding, which takes either a WebCrypto key or a
-function, because that is the one place the platforms hold a key differently.
+Three exceptions, named where they are. `crypto.getRandomValues`, which every
+target has. Signing a binding, which takes either a WebCrypto key or a
+function, because that's where the platforms hold a key differently. And the
+vault's Argon2id, which takes a `VaultKdfs` from the app: pure-JS Argon2id takes
+26 seconds on an interpreter, so the web uses WASM and a phone uses native code.
+The pure-JS one here is the reference, and the answers every implementation has
+to give are in `check-identity-vault.mjs`.
 
 **Hiding that a file exists.** An attachment is encrypted and its name, type and
 dimensions go inside the message, but the server still sees that a file was
@@ -80,6 +91,8 @@ along with where the seed is stored and how it reaches a second device.
 what a client installs. `check-crypto-vectors.mjs` holds bytes produced before
 the WebCrypto-to-noble conversion and nothing regenerates them — a change that
 quietly altered the envelope would leave every message already sent unreadable.
+`check-identity-vault.mjs` does the same for the sealed seed: three bundles
+sealed by the client before Argon2id, and one from the version that added it.
 
 ## Issues
 
