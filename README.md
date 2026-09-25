@@ -41,6 +41,9 @@ either way.
 - **`mls-authentication`** — the check `ts-mls` runs on every leaf: a
   certificate that verifies, for this server, for this leaf key, from a person
   key the client trusts. The client decides what it trusts.
+- **`mls-group`** — MLS groups for DMs: a device, its KeyPackages, create, add,
+  remove, update, process, encrypt and decrypt, and the group state as bytes to
+  save. Everything that goes over the network is MLS wire bytes.
 - **`mls-provider`** — the crypto `ts-mls` runs on: X25519 HPKE, Ed25519 and
   SHA-256 on `@noble`, for MLS suite 1 only. It lives here because Hermes has no
   `crypto.subtle`, and both of the library's own providers need it.
@@ -100,11 +103,13 @@ dimensions go inside the message, but the server still sees that a file was
 uploaded, how big the ciphertext is, and when. Padding the size is separate work
 and is not pretended at.
 
-**Forward secret.** A message key comes from the seed and never moves, so a seed
-that leaks reads every message ever sent to it. Signal and Matrix ratchet; this
-does not. That is GRYT-754 and it is a different protocol rather than a setting.
-[`docs/message-security.md`](docs/message-security.md) is the design covering it,
-along with where the seed is stored and how it reaches a second device.
+**Forward secret, yet.** A sealed message's key comes from the seed and never
+moves, so a seed that leaks reads every sealed message ever sent to it. That's
+GRYT-754. The MLS modules above are the fix, and nothing sends through them
+until the clients switch over, which is the rest of stage 1 in
+[`docs/mls-design.md`](docs/mls-design.md).
+[`docs/message-security.md`](docs/message-security.md) covers where the seed is
+stored and how it reaches a second device.
 
 **A cryptography library.** The primitives are `@noble/curves`,
 `@noble/hashes` and `@noble/ciphers`. This is the composition of them.

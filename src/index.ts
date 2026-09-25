@@ -24,3 +24,4 @@ export * from "./mls-provider";
 export * from "./mls-authentication";
 export * from "./mls-device-certificate";
 export * from "./mls-person-key";
+export * from "./mls-group";

@@ -37,6 +37,7 @@ const MODULES = [
   "message-keys",
   "mls-authentication",
   "mls-device-certificate",
+  "mls-group",
   "mls-person-key",
   "mls-provider",
   "peer-keys",
