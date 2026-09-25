@@ -510,7 +510,8 @@ prove you're the same person, rather than every message you've ever received.
 ## What GRYT-1244 inherits
 
 GRYT-1244 is the design task for opt-in end-to-end encryption in private channels and
-group DMs, using MLS. It isn't designed here. What this page constrains:
+group DMs, using MLS. It isn't designed here; [mls-design.md](mls-design.md) has it. What
+this page constrains:
 
 - **The library choice is shared.** If DMs go to MLS, channels use the same
   implementation. Two MLS stacks in one client would be worse than either.
