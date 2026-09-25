@@ -34,7 +34,8 @@
     "@noble/ciphers": "^2",
     "@noble/curves": "^2.3.0",
     "@noble/hashes": "^2.3.0",
-    "@scure/bip39": "^2.3.0"
+    "@scure/bip39": "^2.3.0",
+    "ts-mls": "1.6.4"
   },
   "devDependencies": {
     "@types/node": "^20.19.33",
@@ -42,5 +43,11 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "overrides": {
+    "ts-mls": {
+      "@noble/curves": "$@noble/curves",
+      "@noble/ciphers": "$@noble/ciphers"
+    }
   }
 }

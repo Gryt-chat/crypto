@@ -20,3 +20,4 @@ export * from "./scope";
 export * from "./seed-words";
 export * from "./thumbprint";
 export * from "./vault-password";
+export * from "./mls-provider";
