@@ -35,6 +35,7 @@ const MODULES = [
   "identity-vault",
   "member-keys",
   "message-keys",
+  "mls-provider",
   "peer-keys",
   "recovery-key",
   "scope",

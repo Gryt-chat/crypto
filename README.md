@@ -34,8 +34,25 @@ either way.
   opens it on its own. Bundles sealed the old way, with PBKDF2, still open.
 - **`recovery-key`** — that key as 52 characters you can write down without
   mixing up 0 and O.
+- **`mls-provider`** — the crypto `ts-mls` runs on: X25519 HPKE, Ed25519 and
+  SHA-256 on `@noble`, for MLS suite 1 only. It lives here because Hermes has no
+  `crypto.subtle`, and both of the library's own providers need it.
 - **`vault-password`** — six random words, and the 12-character floor for a
   password you type yourself.
+
+## Installing it with npm
+
+`ts-mls` is pinned exactly, and it pins its optional `@noble` peers at older
+versions than this package uses. npm stops with `ERESOLVE` over that, so an npm
+project needs the same override this repository has:
+
+```json
+"overrides": {
+  "ts-mls": { "@noble/curves": "$@noble/curves", "@noble/ciphers": "$@noble/ciphers" }
+}
+```
+
+Yarn 1 prints a warning and carries on.
 
 ## Importing it
 
@@ -93,6 +110,8 @@ the WebCrypto-to-noble conversion and nothing regenerates them — a change that
 quietly altered the envelope would leave every message already sent unreadable.
 `check-identity-vault.mjs` does the same for the sealed seed: three bundles
 sealed by the client before Argon2id, and one from the version that added it.
+`check-mls-provider.mjs` runs the MLS crypto against the RFC 9180, 8032 and 4231
+known answers with `crypto.subtle` taken away, the way Hermes has it.
 
 ## Issues
 
