@@ -34,6 +34,13 @@ either way.
   opens it on its own. Bundles sealed the old way, with PBKDF2, still open.
 - **`recovery-key`** — that key as 52 characters you can write down without
   mixing up 0 and O.
+- **`mls-person-key`** — an Ed25519 key per server from the 24 words, the same
+  on all your devices, and a JWT from your identity key saying it's yours.
+- **`mls-device-certificate`** — the person key signing one device's MLS leaf
+  key, with a device id and a name. These bytes are the leaf's credential.
+- **`mls-authentication`** — the check `ts-mls` runs on every leaf: a
+  certificate that verifies, for this server, for this leaf key, from a person
+  key the client trusts. The client decides what it trusts.
 - **`mls-provider`** — the crypto `ts-mls` runs on: X25519 HPKE, Ed25519 and
   SHA-256 on `@noble`, for MLS suite 1 only. It lives here because Hermes has no
   `crypto.subtle`, and both of the library's own providers need it.

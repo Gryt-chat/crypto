@@ -21,3 +21,6 @@ export * from "./seed-words";
 export * from "./thumbprint";
 export * from "./vault-password";
 export * from "./mls-provider";
+export * from "./mls-authentication";
+export * from "./mls-device-certificate";
+export * from "./mls-person-key";
