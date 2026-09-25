@@ -494,11 +494,12 @@ export const vectorFiles = [
 ]
 
 
-// load(file) returns the parsed JSON array; the pure provider only covers HKDF-SHA256 suites 1 to 3.
-export async function runVectors({ load, providerName = "default", only, log = () => {}, now }) {
-  provider = providers[providerName]
+// load(file) returns the parsed JSON array. `provider` and `suites` let @gryt/crypto's CI run its own.
+export async function runVectors({ load, providerName = "default", provider: given, suites, only, log = () => {}, now }) {
+  provider = given ?? providers[providerName]
   impls.clear()
-  const supported = (suite) => providerName !== "pure" || suite === undefined || suite <= 3
+  const supported = (suite) =>
+    suite === undefined || (suites ? suites.includes(suite) : providerName !== "pure" || suite <= 3)
   const report = []
   for (const [file, check] of vectorFiles) {
     if (only && !file.includes(only)) continue
@@ -540,4 +541,25 @@ export async function runVectors({ load, providerName = "default", only, log = (
     report.push({ file, pass, fail, ms, suites })
   }
   return report
+}
+
+const flip = (h) => h.slice(0, -1) + (h.at(-1) === "0" ? "1" : "0")
+// One wrong expected value per file, for the self-tests: each should fail exactly one vector.
+export const corruptions = {
+  "tree-math.json": (v) => (v.root += 1),
+  "crypto-basics.json": (v) => (v.derive_secret.out = flip(v.derive_secret.out)),
+  "secret-tree.json": (v) => (v.leaves[0][0].application_key = flip(v.leaves[0][0].application_key)),
+  "message-protection.json": (v) => (v.application = flip(v.application)),
+  "key-schedule.json": (v) => (v.epochs[0].exporter.secret = flip(v.epochs[0].exporter.secret)),
+  "psk_secret.json": (v) => (v.psk_secret = flip(v.psk_secret)),
+  "transcript-hashes.json": (v) => (v.interim_transcript_hash_after = flip(v.interim_transcript_hash_after)),
+  "welcome.json": (v) => (v.signer_pub = flip(v.signer_pub)),
+  "tree-operations.json": (v) => (v.tree_hash_after = flip(v.tree_hash_after)),
+  "tree-validation.json": (v) => (v.tree_hashes[0] = flip(v.tree_hashes[0])),
+  "treekem.json": (v) => (v.update_paths[0].commit_secret = flip(v.update_paths[0].commit_secret)),
+  "messages.json": (v) => (v.commit += "00"),
+  "deserialization.json": (v) => (v.length += 1),
+  "passive-client-welcome.json": (v) => (v.initial_epoch_authenticator = flip(v.initial_epoch_authenticator)),
+  "passive-client-handling-commit.json": (v) => (v.epochs[0].epoch_authenticator = flip(v.epochs[0].epoch_authenticator)),
+  "passive-client-random.json": (v) => (v.epochs.at(-1).epoch_authenticator = flip(v.epochs.at(-1).epoch_authenticator)),
 }
