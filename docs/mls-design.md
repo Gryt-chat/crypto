@@ -765,3 +765,19 @@ Each one can be asked on its own.
 
     Recommend **a** now and **c** later. The web client can't fetch most pages itself
     because of CORS, so under **c** web senders still get no previews.
+
+## Decisions (Sivert, 2026-09-25)
+
+1. **Ciphersuite:** suite 1 (X25519, Ed25519, AES-128-GCM).
+2. **Vouching for a device:** a per-server person key from the 24 words signs each of your devices.
+3. **Pairing:** hands the new device the seed, so every device is a full peer.
+4. **Someone who can't do MLS yet:** send MLS anyway, and older apps show "update to read". (This differs from the recommendation, which was to stay on today's sealing until everyone could. The trade-off accepted: someone on an old app can't read new messages until they update.)
+5. **The password bundle on Keycloak:** once pairing ships, stop writing new ones. Existing bundles keep opening, nothing is deleted, and people can remove their own.
+6. **The history backup:** one encrypted blob per member on each community server.
+7. **Retention:** a server keeps MLS ciphertext for 30 days, and its host can shorten that.
+8. **New members of a private channel:** history is shared with them automatically by a member who's online. (This differs from the recommendation, which was nothing at first. Stage 3 has to design what "automatically" shares, how far back, and what a member's app does when asked, since the sender's app is the one that decrypts and re-shares.)
+9. **Turning encryption on for a channel:** Manage channels can do it, and it can't be turned off.
+10. **Channel size:** capped at 100 devices (about 50 people) until a real phone is measured.
+11. **Reports:** the reporter's app sends its decrypted copy, marked unverified. Verifiable reports come later as their own piece of work.
+12. **Push:** only "new message", and the app decrypts after it wakes.
+13. **Link previews:** off in encrypted conversations for now. Later they'll be made by the sender's app and sent inside the message.
