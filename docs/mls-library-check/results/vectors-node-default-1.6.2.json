@@ -1,0 +1,708 @@
+{
+  "runtime": "node v24.16.0",
+  "provider": "default",
+  "report": [
+    {
+      "file": "tree-math.json",
+      "pass": 10,
+      "fail": 0,
+      "ms": 6,
+      "suites": [
+        {
+          "suite": "-",
+          "pass": 10,
+          "fail": 0,
+          "checks": 8164,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "crypto-basics.json",
+      "pass": 7,
+      "fail": 0,
+      "ms": 378,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 1,
+          "fail": 0,
+          "checks": 10,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 1,
+          "fail": 0,
+          "checks": 10,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 1,
+          "fail": 0,
+          "checks": 10,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 1,
+          "fail": 0,
+          "checks": 10,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 1,
+          "fail": 0,
+          "checks": 10,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 1,
+          "fail": 0,
+          "checks": 10,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 1,
+          "fail": 0,
+          "checks": 10,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "secret-tree.json",
+      "pass": 21,
+      "fail": 0,
+      "ms": 316,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 3,
+          "fail": 0,
+          "checks": 334,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 3,
+          "fail": 0,
+          "checks": 334,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 3,
+          "fail": 0,
+          "checks": 334,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 3,
+          "fail": 0,
+          "checks": 334,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 3,
+          "fail": 0,
+          "checks": 334,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 3,
+          "fail": 0,
+          "checks": 334,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 3,
+          "fail": 0,
+          "checks": 334,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "message-protection.json",
+      "pass": 7,
+      "fail": 0,
+      "ms": 150,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 1,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 1,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 1,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 1,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 1,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 1,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 1,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "key-schedule.json",
+      "pass": 7,
+      "fail": 0,
+      "ms": 49,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 1,
+          "fail": 0,
+          "checks": 70,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 1,
+          "fail": 0,
+          "checks": 70,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 1,
+          "fail": 0,
+          "checks": 70,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 1,
+          "fail": 0,
+          "checks": 70,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 1,
+          "fail": 0,
+          "checks": 70,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 1,
+          "fail": 0,
+          "checks": 70,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 1,
+          "fail": 0,
+          "checks": 70,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "psk_secret.json",
+      "pass": 77,
+      "fail": 0,
+      "ms": 24,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 11,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 11,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 11,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 11,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 11,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 11,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 11,
+          "fail": 0,
+          "checks": 11,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "transcript-hashes.json",
+      "pass": 7,
+      "fail": 0,
+      "ms": 1,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 1,
+          "fail": 0,
+          "checks": 4,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 1,
+          "fail": 0,
+          "checks": 4,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 1,
+          "fail": 0,
+          "checks": 4,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 1,
+          "fail": 0,
+          "checks": 4,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 1,
+          "fail": 0,
+          "checks": 4,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 1,
+          "fail": 0,
+          "checks": 4,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 1,
+          "fail": 0,
+          "checks": 4,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "welcome.json",
+      "pass": 7,
+      "fail": 0,
+      "ms": 44,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 1,
+          "fail": 0,
+          "checks": 6,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 1,
+          "fail": 0,
+          "checks": 6,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 1,
+          "fail": 0,
+          "checks": 6,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 1,
+          "fail": 0,
+          "checks": 6,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 1,
+          "fail": 0,
+          "checks": 6,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 1,
+          "fail": 0,
+          "checks": 6,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 1,
+          "fail": 0,
+          "checks": 6,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "tree-operations.json",
+      "pass": 5,
+      "fail": 0,
+      "ms": 5,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 5,
+          "fail": 0,
+          "checks": 15,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "tree-validation.json",
+      "pass": 98,
+      "fail": 0,
+      "ms": 2712,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 14,
+          "fail": 0,
+          "checks": 1097,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 14,
+          "fail": 0,
+          "checks": 1097,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 14,
+          "fail": 0,
+          "checks": 1097,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 14,
+          "fail": 0,
+          "checks": 1097,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 14,
+          "fail": 0,
+          "checks": 1097,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 14,
+          "fail": 0,
+          "checks": 1097,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 14,
+          "fail": 0,
+          "checks": 1097,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "treekem.json",
+      "pass": 77,
+      "fail": 0,
+      "ms": 20065,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 11,
+          "fail": 0,
+          "checks": 1387,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 11,
+          "fail": 0,
+          "checks": 1387,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 11,
+          "fail": 0,
+          "checks": 1387,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 11,
+          "fail": 0,
+          "checks": 1387,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 11,
+          "fail": 0,
+          "checks": 1387,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 11,
+          "fail": 0,
+          "checks": 1387,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 11,
+          "fail": 0,
+          "checks": 1387,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "messages.json",
+      "pass": 300,
+      "fail": 0,
+      "ms": 70,
+      "suites": [
+        {
+          "suite": "-",
+          "pass": 300,
+          "fail": 0,
+          "checks": 15300,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "deserialization.json",
+      "pass": 14,
+      "fail": 0,
+      "ms": 0,
+      "suites": [
+        {
+          "suite": "-",
+          "pass": 14,
+          "fail": 0,
+          "checks": 14,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "passive-client-welcome.json",
+      "pass": 56,
+      "fail": 0,
+      "ms": 3330,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 8,
+          "fail": 0,
+          "checks": 16,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 8,
+          "fail": 0,
+          "checks": 16,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 8,
+          "fail": 0,
+          "checks": 16,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 8,
+          "fail": 0,
+          "checks": 16,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 8,
+          "fail": 0,
+          "checks": 16,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 8,
+          "fail": 0,
+          "checks": 16,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 8,
+          "fail": 0,
+          "checks": 16,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "passive-client-handling-commit.json",
+      "pass": 91,
+      "fail": 0,
+      "ms": 4708,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 13,
+          "fail": 0,
+          "checks": 52,
+          "failures": []
+        },
+        {
+          "suite": 2,
+          "pass": 13,
+          "fail": 0,
+          "checks": 52,
+          "failures": []
+        },
+        {
+          "suite": 3,
+          "pass": 13,
+          "fail": 0,
+          "checks": 52,
+          "failures": []
+        },
+        {
+          "suite": 4,
+          "pass": 13,
+          "fail": 0,
+          "checks": 52,
+          "failures": []
+        },
+        {
+          "suite": 5,
+          "pass": 13,
+          "fail": 0,
+          "checks": 52,
+          "failures": []
+        },
+        {
+          "suite": 6,
+          "pass": 13,
+          "fail": 0,
+          "checks": 52,
+          "failures": []
+        },
+        {
+          "suite": 7,
+          "pass": 13,
+          "fail": 0,
+          "checks": 52,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "file": "passive-client-random.json",
+      "pass": 1,
+      "fail": 0,
+      "ms": 2411,
+      "suites": [
+        {
+          "suite": 1,
+          "pass": 1,
+          "fail": 0,
+          "checks": 202,
+          "failures": []
+        }
+      ]
+    }
+  ]
+}
