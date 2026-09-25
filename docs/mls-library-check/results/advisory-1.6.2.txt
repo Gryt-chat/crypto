@@ -1,0 +1,33 @@
+PASS tree-math.json                         10/10 vectors  6 ms
+PASS crypto-basics.json                     7/7 vectors  378 ms
+PASS secret-tree.json                       21/21 vectors  316 ms
+PASS message-protection.json                7/7 vectors  150 ms
+PASS key-schedule.json                      7/7 vectors  49 ms
+PASS psk_secret.json                        77/77 vectors  24 ms
+PASS transcript-hashes.json                 7/7 vectors  1 ms
+PASS welcome.json                           7/7 vectors  44 ms
+PASS tree-operations.json                   5/5 vectors  5 ms
+PASS tree-validation.json                   98/98 vectors  2712 ms
+PASS treekem.json                           77/77 vectors  20065 ms
+PASS messages.json                          300/300 vectors  70 ms
+PASS deserialization.json                   14/14 vectors  0 ms
+PASS passive-client-welcome.json            56/56 vectors  3330 ms
+PASS passive-client-handling-commit.json    91/91 vectors  4708 ms
+PASS passive-client-random.json             1/1 vectors  2411 ms
+
+provider=default ts-mls=1.6.2 node=v24.16.0
+all vectors passed
+FAIL 128_DHKEMP256_AES removed member cannot read the next epoch
+PASS 128_DHKEMP256_AES new member cannot read messages from before the join
+PASS 128_DHKEMP256_AES a replayed message is rejected (its key is gone)
+PASS 128_DHKEMP256_AES out-of-order messages in one epoch both open
+PASS 128_DHKEMP256_AES a message from the previous epoch opens after the commit
+PASS 128_DHKEMP256_AES a tampered ciphertext is rejected
+FAIL 128_DHKEMX25519_A removed member cannot read the next epoch
+PASS 128_DHKEMX25519_A new member cannot read messages from before the join
+PASS 128_DHKEMX25519_A a replayed message is rejected (its key is gone)
+PASS 128_DHKEMX25519_A out-of-order messages in one epoch both open
+PASS 128_DHKEMX25519_A a message from the previous epoch opens after the commit
+PASS 128_DHKEMX25519_A a tampered ciphertext is rejected
+
+provider=default ts-mls=1.6.2: 2 failed

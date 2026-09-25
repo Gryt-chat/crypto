@@ -465,7 +465,8 @@ already a signed public key published through an untrusted server and one-time p
 the same idea with more of them. The WASM problem is fatal while mobile is in scope.
 
 **MLS (RFC 9420), via `ts-mls`.** 1.6.4, 691 KB unpacked, one dependency (`@hpke/core`),
-pure TypeScript with no WASM, so it runs on Hermes. MLS assumes an untrusted Delivery
+pure TypeScript with no WASM, so it runs on Hermes once Gryt supplies the crypto provider
+([the library check](mls-library-check.md) has why). MLS assumes an untrusted Delivery
 Service that orders commits and can't read them, which is what a Gryt community server
 already is. It gives forward secrecy and post-compromise security, and a member added to a
 group gets no history, which is the behaviour Gryt already has.
@@ -548,10 +549,11 @@ group DMs, using MLS. It isn't designed here. What this page constrains:
   fewer people locked out and one more thing to get through before sending a message.
   Offered means most people will skip it. I've said offered, with an extra click to decline,
   and I'm not confident that's the right side of the line.
-- **`ts-mls` maturity.** Version 1.6.4, updated August 2026, and I haven't read the code or
-  checked what it claims against RFC 9420's interop vectors. "The only one that runs on
-  Hermes" is a reason to look closely, not a reason to trust it. That check belongs in
-  GRYT-1244.
+- **`ts-mls` maturity.** Checked in [mls-library-check.md](mls-library-check.md). It passes
+  every RFC 9420 interop vector: 785 in Node, Chrome and Electron, and the 525 for suites 1
+  to 3 on Hermes. The verdict is to use it, with conditions. Gryt has to supply the crypto
+  provider on Hermes. And a high-severity advisory, fixed in 1.6.4, slipped past the
+  vectors, so Gryt needs exact pins and its own property tests.
 - **Six digits for the pairing code.** The reasoning is that an attacker gets one online
   attempt against an expiring rendezvous, so offline-guess entropy isn't the right measure.
   I haven't worked through what the relay would have to do wrong for that to stop holding,

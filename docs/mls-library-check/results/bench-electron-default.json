@@ -1,0 +1,121 @@
+{
+  "runtime": "electron 40.6.1 (chrome 144.0.7559.220)",
+  "results": [
+    {
+      "suite": "MLS_128_DHKEMP256_AES128GCM_SHA256_P256",
+      "provider": "default",
+      "sizes": {
+        "2": {
+          "n": 2,
+          "createGroup": 0.3999999761581421,
+          "addCommit": 3.199999988079071,
+          "addProcess": 4,
+          "addJoin": 5.200000047683716,
+          "removeCommit": 1.300000011920929,
+          "removeProcess": 2.899999976158142,
+          "updateCommit": 1.300000011920929,
+          "updateProcess": 2.899999976158142,
+          "bulkAdd": 5.199999988079071,
+          "welcomeBytes": 1263,
+          "commitBytes": 646,
+          "encrypt": 0.19,
+          "messageBytes": 400,
+          "decrypt": 1.1270000004768372
+        },
+        "10": {
+          "n": 10,
+          "createGroup": 0.19999998807907104,
+          "addCommit": 3.5,
+          "addProcess": 4.300000011920929,
+          "addJoin": 15,
+          "removeCommit": 3.400000035762787,
+          "removeProcess": 3.699999988079071,
+          "updateCommit": 3.200000047683716,
+          "updateProcess": 3.800000011920929,
+          "bulkAdd": 21.80000001192093,
+          "welcomeBytes": 3706,
+          "commitBytes": 1782,
+          "encrypt": 0.2080000001192093,
+          "messageBytes": 402,
+          "decrypt": 1.0969999998807907
+        },
+        "100": {
+          "n": 100,
+          "createGroup": 0,
+          "addCommit": 8.099999964237213,
+          "addProcess": 11,
+          "addJoin": 144.10000002384186,
+          "removeCommit": 22.80000001192093,
+          "removeProcess": 9.900000035762787,
+          "updateCommit": 23,
+          "updateProcess": 9.799999952316284,
+          "bulkAdd": 237.20000004768372,
+          "welcomeBytes": 28060,
+          "commitBytes": 12428,
+          "encrypt": 0.18399999976158143,
+          "messageBytes": 402,
+          "decrypt": 1.135
+        }
+      },
+      "keyPackage": 0.699999988079071
+    },
+    {
+      "suite": "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
+      "provider": "default",
+      "sizes": {
+        "2": {
+          "n": 2,
+          "createGroup": 0.19999998807907104,
+          "addCommit": 0.5,
+          "addProcess": 0.40000003576278687,
+          "addJoin": 0.5,
+          "removeCommit": 0.6000000238418579,
+          "removeProcess": 0.3999999761581421,
+          "updateCommit": 0.5,
+          "updateProcess": 0.40000003576278687,
+          "bulkAdd": 0.699999988079071,
+          "welcomeBytes": 1065,
+          "commitBytes": 531,
+          "encrypt": 0.06699999988079071,
+          "messageBytes": 393,
+          "decrypt": 0.065
+        },
+        "10": {
+          "n": 10,
+          "createGroup": 0.20000004768371582,
+          "addCommit": 1,
+          "addProcess": 0.800000011920929,
+          "addJoin": 1.800000011920929,
+          "removeCommit": 2.099999964237213,
+          "removeProcess": 1.199999988079071,
+          "updateCommit": 2.199999988079071,
+          "updateProcess": 1.199999988079071,
+          "bulkAdd": 2.300000011920929,
+          "welcomeBytes": 3074,
+          "commitBytes": 1281,
+          "encrypt": 0.065,
+          "messageBytes": 394,
+          "decrypt": 0.06600000023841858
+        },
+        "100": {
+          "n": 100,
+          "createGroup": 0.09999996423721313,
+          "addCommit": 5.600000023841858,
+          "addProcess": 4.800000011920929,
+          "addJoin": 43.19999998807907,
+          "removeCommit": 15.600000023841858,
+          "removeProcess": 7.399999976158142,
+          "updateCommit": 16.399999976158142,
+          "updateProcess": 7.399999976158142,
+          "bulkAdd": 30.5,
+          "welcomeBytes": 23479,
+          "commitBytes": 8771,
+          "encrypt": 0.07300000011920929,
+          "messageBytes": 395,
+          "decrypt": 0.10099999964237213
+        }
+      },
+      "keyPackage": 0.15000000596046448
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "mls-library-check",
+  "private": true,
+  "type": "module",
+  "description": "Checks ts-mls against the RFC 9420 interop vectors and times it in Node, Chrome, Electron and Hermes. Not part of @gryt/crypto.",
+  "scripts": {
+    "fetch-vectors": "sh fetch-vectors.sh",
+    "vectors": "node vectors.mjs",
+    "self-test": "node self-test.mjs",
+    "properties": "node properties.mjs",
+    "bench": "node bench-node.mjs",
+    "all": "sh run-all.sh",
+    "advisory": "sh advisory.sh"
+  },
+  "dependencies": {
+    "@hpke/chacha20poly1305": "1.8.0",
+    "@hpke/dhkem-x448": "1.8.0",
+    "@noble/ciphers": "2.1.1",
+    "@noble/curves": "2.0.1",
+    "@noble/hashes": "2.0.1",
+    "ts-mls": "1.6.4"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "babel-preset-expo": "57.0.10",
+    "esbuild": "^0.28.2"
+  }
+}

@@ -1,0 +1,14 @@
+PASS 128_DHKEMP256_AES removed member cannot read the next epoch
+PASS 128_DHKEMP256_AES new member cannot read messages from before the join
+PASS 128_DHKEMP256_AES a replayed message is rejected (its key is gone)
+PASS 128_DHKEMP256_AES out-of-order messages in one epoch both open
+PASS 128_DHKEMP256_AES a message from the previous epoch opens after the commit
+PASS 128_DHKEMP256_AES a tampered ciphertext is rejected
+PASS 128_DHKEMX25519_A removed member cannot read the next epoch
+PASS 128_DHKEMX25519_A new member cannot read messages from before the join
+PASS 128_DHKEMX25519_A a replayed message is rejected (its key is gone)
+PASS 128_DHKEMX25519_A out-of-order messages in one epoch both open
+PASS 128_DHKEMX25519_A a message from the previous epoch opens after the commit
+PASS 128_DHKEMX25519_A a tampered ciphertext is rejected
+
+provider=default ts-mls=1.6.4: all properties hold

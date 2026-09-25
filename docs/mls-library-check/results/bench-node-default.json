@@ -1,0 +1,121 @@
+{
+  "runtime": "node v24.16.0",
+  "results": [
+    {
+      "suite": "MLS_128_DHKEMP256_AES128GCM_SHA256_P256",
+      "provider": "default",
+      "sizes": {
+        "2": {
+          "n": 2,
+          "createGroup": 1.803042000000005,
+          "addCommit": 5.4306669999999855,
+          "addProcess": 5.882499999999993,
+          "addJoin": 7.746583000000015,
+          "removeCommit": 3.8903329999999983,
+          "removeProcess": 5.7463750000000005,
+          "updateCommit": 3.4842499999999745,
+          "updateProcess": 5.080332999999996,
+          "bulkAdd": 10.374832999999995,
+          "welcomeBytes": 1252,
+          "commitBytes": 637,
+          "encrypt": 0.6244524999999999,
+          "messageBytes": 399,
+          "decrypt": 1.8190712500000001
+        },
+        "10": {
+          "n": 10,
+          "createGroup": 0.4422499999999445,
+          "addCommit": 7.234458999999902,
+          "addProcess": 6.856167000000028,
+          "addJoin": 20.835124999999948,
+          "removeCommit": 9.374500000000012,
+          "removeProcess": 7.230332999999973,
+          "updateCommit": 7.967292000000043,
+          "updateProcess": 7.740040999999906,
+          "bulkAdd": 36.956833000000074,
+          "welcomeBytes": 3698,
+          "commitBytes": 1780,
+          "encrypt": 0.31441625000000045,
+          "messageBytes": 402,
+          "decrypt": 1.4353916700000002
+        },
+        "100": {
+          "n": 100,
+          "createGroup": 0.41133300000001327,
+          "addCommit": 20.028041999999914,
+          "addProcess": 18.040792000000238,
+          "addJoin": 213.358792,
+          "removeCommit": 34.641417000000274,
+          "removeProcess": 23.847792000000027,
+          "updateCommit": 37.424209000000246,
+          "updateProcess": 23.674374999999827,
+          "bulkAdd": 281.67308300000013,
+          "welcomeBytes": 28019,
+          "commitBytes": 12423,
+          "encrypt": 0.3381008299999985,
+          "messageBytes": 402,
+          "decrypt": 1.4597216600000003
+        }
+      },
+      "keyPackage": 1.2315834999999993
+    },
+    {
+      "suite": "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
+      "provider": "default",
+      "sizes": {
+        "2": {
+          "n": 2,
+          "createGroup": 1.0701669999998558,
+          "addCommit": 1.8427919999999176,
+          "addProcess": 1.6886249999997744,
+          "addJoin": 2.221125000000029,
+          "removeCommit": 2.49737499999992,
+          "removeProcess": 1.7827080000001843,
+          "updateCommit": 2.315291000000343,
+          "updateProcess": 1.6156670000000304,
+          "bulkAdd": 3.52350000000024,
+          "welcomeBytes": 1067,
+          "commitBytes": 527,
+          "encrypt": 0.22804041999999755,
+          "messageBytes": 393,
+          "decrypt": 0.2193212500000027
+        },
+        "10": {
+          "n": 10,
+          "createGroup": 0.2799169999998412,
+          "addCommit": 3.4822079999999005,
+          "addProcess": 2.2873329999997623,
+          "addJoin": 5.600500000000011,
+          "removeCommit": 5.824499999999716,
+          "removeProcess": 3.894000000000233,
+          "updateCommit": 5.3635840000001735,
+          "updateProcess": 5.329457999999704,
+          "bulkAdd": 7.594125000000076,
+          "welcomeBytes": 3086,
+          "commitBytes": 1297,
+          "encrypt": 0.24529875000000176,
+          "messageBytes": 394,
+          "decrypt": 0.2415525000000025
+        },
+        "100": {
+          "n": 100,
+          "createGroup": 0.31541699999979755,
+          "addCommit": 25.12804199999937,
+          "addProcess": 20.762250000000677,
+          "addJoin": 106.60062500000004,
+          "removeCommit": 46.52466699999968,
+          "removeProcess": 27.70087499999954,
+          "updateCommit": 35.20583399999941,
+          "updateProcess": 19.980375000000095,
+          "bulkAdd": 46.4184580000001,
+          "welcomeBytes": 23439,
+          "commitBytes": 8769,
+          "encrypt": 0.20728291999999782,
+          "messageBytes": 395,
+          "decrypt": 0.216123749999997
+        }
+      },
+      "keyPackage": 0.5470419999999194
+    }
+  ]
+}
