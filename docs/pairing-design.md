@@ -464,8 +464,8 @@ never knows whether the person was a guest.
 
 N has to get the scope right. It's `srv:` plus the server's lineage id where one is pinned,
 and the host where not. If N worked it out for itself before it had the server pins, it
-could pick the host and derive a different key. So `servers[].scope` in the envelope is
-authoritative, and N writes the server pins before deriving anything.
+could pick the host and derive a different key. So N always uses `servers[].scope` from
+the envelope, and writes the server pins before deriving anything.
 
 N doesn't get A's device delegations (`device-delegation.ts`). It holds the seed itself,
 so it doesn't need anybody to vouch for it.
