@@ -22,11 +22,14 @@ either way.
 - **`dm-key-binding`** — a short JWT saying "this message key is mine", signed
   by the identity key that joined the server.
 - **`message-keys`** — a random key per message, encrypted once for each member.
-- **`peer-keys`** — pin what you saw first, refuse a change.
+- **`peer-keys`** — pin what you saw first, refuse a change. The pin holds the
+  identity, the DM key and the MLS person key, and it answers MLS's
+  `trustPersonKey` for a conversation.
 - **`member-keys`** — the same decision over a whole member list.
 - **`conversation-encryption`** — every member has a usable key, or nobody gets
   it sealed.
-- **`comparison-code`** — sixty digits two people read to each other.
+- **`comparison-code`** — sixty digits two people read to each other. They
+  cover person keys too, once they are pinned.
 - **`attachments`** — a key per file, bound so one file’s bytes cannot be served
   as another’s, with the key inside the sealed message.
 - **`identity-vault`** — the 24 words, sealed so your account can carry them to

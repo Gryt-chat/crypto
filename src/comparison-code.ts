@@ -16,6 +16,8 @@ export interface ComparisonSide {
   thumbprint: string;
   /** Their DM public key, base64url, as pinned. */
   dmPublicKey: string;
+  /** Their MLS person key, base64url, as pinned. Without one, a side hashes as it did before. */
+  personPublicKey?: string;
 }
 
 /**
@@ -43,11 +45,12 @@ function digitsFrom(bytes: Uint8Array, count: number): string {
 
 /** The code for one pair. Sorted, so both sides compute the same string. */
 export function comparisonCode(a: ComparisonSide, b: ComparisonSide): string {
-  const halves = [
-    [a.thumbprint, a.dmPublicKey],
-    [b.thumbprint, b.dmPublicKey],
-  ]
-    .map((half) => JSON.stringify(half))
+  const halves = [a, b]
+    .map((side) => {
+      const half = [side.thumbprint, side.dmPublicKey];
+      if (side.personPublicKey !== undefined) half.push(side.personPublicKey);
+      return JSON.stringify(half);
+    })
     .sort();
 
   /*

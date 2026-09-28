@@ -12,7 +12,7 @@ import type { IdentityScope } from "./scope";
 
 /**
  * Whether this person key is one you'll talk to here: bound by the member's identity and
- * matching the pin. The client answers it; this package has no pins of its own for it yet.
+ * matching the pin. `trustPinnedPersonKeys` in peer-keys answers it from the pins.
  */
 export type TrustPersonKey = (certificate: DeviceCertificate) => boolean | Promise<boolean>;
 
