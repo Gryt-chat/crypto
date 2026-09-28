@@ -8,6 +8,8 @@ import {
   type VerifiedDmKeyBinding,
   verifyDmKeyBinding,
 } from "./dm-key-binding";
+import type { TrustPersonKey } from "./mls-authentication";
+import { type VerifiedPersonKeyBinding, verifyPersonKeyBinding } from "./mls-person-key";
 import type { IdentityScope } from "./scope";
 
 /**
@@ -27,11 +29,13 @@ export interface PeerPin {
   thumbprint: string;
   /** The DM public key it vouched for, base64url. */
   dmPublicKey: string;
+  /** Their MLS person key, base64url, bound by the same identity. Absent until one is seen. */
+  personPublicKey?: string;
   firstSeenAt: number;
   lastSeenAt: number;
   /**
-   * When these exact keys were compared out of band (GRYT-730). Dropped whenever either half
-   * moves — carrying it across would turn the one honest claim here into a lie.
+   * When these keys were compared out of band (GRYT-730). Dropped when the identity or DM key
+   * moves; kept when a person key is first recorded, since the compared identity signed it.
    */
   comparedAt?: number;
 }
@@ -110,6 +114,8 @@ export function pinPeerKey(
     // against keys nobody compared is worse than one that never said it.
     comparedAt: sameKeys ? existing?.comparedAt : undefined,
   };
+  // A deliberate re-pin starts the person key over too; the next binding is recorded fresh.
+  if (sameKeys && existing?.personPublicKey) pin.personPublicKey = existing.personPublicKey;
 
   pins[key] = pin;
   store.write(pins);
@@ -124,7 +130,7 @@ export function markPeerCompared(
   store: PeerPinStore,
   scope: IdentityScope,
   memberId: string,
-  keys: { thumbprint: string; dmPublicKey: string },
+  keys: { thumbprint: string; dmPublicKey: string; personPublicKey?: string },
   now = Date.now(),
 ): boolean {
   const pins = store.read();
@@ -134,7 +140,8 @@ export function markPeerCompared(
   if (
     !pin ||
     pin.thumbprint !== keys.thumbprint ||
-    pin.dmPublicKey !== keys.dmPublicKey
+    pin.dmPublicKey !== keys.dmPublicKey ||
+    (pin.personPublicKey ?? null) !== (keys.personPublicKey ?? null)
   ) {
     return false;
   }
@@ -208,4 +215,102 @@ export async function evaluatePeerKey({
   }
 
   return { kind: "known", verified, pin };
+}
+
+export type PersonKeyDecision =
+  /** They have published no person key. */
+  | { kind: "none" }
+  /** A binding that doesn't check out. It never becomes part of a pin. */
+  | { kind: "unusable"; reason: string }
+  /** No pin for this member yet, so nothing to check who signed it against. Pin the DM key first. */
+  | { kind: "unpinned"; verified: VerifiedPersonKeyBinding }
+  /** Signed by the pinned identity, and no person key recorded yet. The caller records it. */
+  | { kind: "first"; verified: VerifiedPersonKeyBinding; pin: PeerPin }
+  | { kind: "known"; verified: VerifiedPersonKeyBinding; pin: PeerPin }
+  /** A different signer or a different person key from the pin. Refused, like a changed DM key. */
+  | {
+      kind: "changed";
+      verified: VerifiedPersonKeyBinding;
+      pin: PeerPin;
+      changedIdentity: boolean;
+      changedKey: boolean;
+    };
+
+/** What to do about a member's person key binding. Writes nothing, like `evaluatePeerKey`. */
+export async function evaluatePersonKey({
+  store,
+  scope,
+  memberId,
+  binding,
+}: {
+  store: PeerPinStore;
+  scope: IdentityScope;
+  memberId: string;
+  binding: string | null | undefined;
+}): Promise<PersonKeyDecision> {
+  if (!binding) return { kind: "none" };
+
+  let verified: VerifiedPersonKeyBinding;
+  try {
+    verified = await verifyPersonKeyBinding(binding, scope);
+  } catch (error) {
+    return { kind: "unusable", reason: error instanceof Error ? error.message : String(error) };
+  }
+
+  const pin = getPeerPin(store, scope, memberId);
+  if (!pin) return { kind: "unpinned", verified };
+
+  const changedIdentity = pin.thumbprint !== verified.identityThumbprint;
+  const changedKey = pin.personPublicKey !== undefined && pin.personPublicKey !== base64Url(verified.personPublicKey);
+  if (changedIdentity || changedKey) return { kind: "changed", verified, pin, changedIdentity, changedKey };
+  return pin.personPublicKey === undefined ? { kind: "first", verified, pin } : { kind: "known", verified, pin };
+}
+
+/**
+ * Record a person key on an existing pin. Refuses (null) unless the pin's identity signed it and
+ * no other person key is there: accepting a change is `forgetPeerPin` and pinning from scratch.
+ */
+export function pinPersonKey(
+  store: PeerPinStore,
+  scope: IdentityScope,
+  memberId: string,
+  verified: VerifiedPersonKeyBinding,
+  now = Date.now(),
+): PeerPin | null {
+  const pins = store.read();
+  const key = pinKey(scope, memberId);
+  const existing = pins[key];
+  const personPublicKey = base64Url(verified.personPublicKey);
+  if (!existing || verified.scope !== scope || existing.thumbprint !== verified.identityThumbprint) return null;
+  if (existing.personPublicKey !== undefined && existing.personPublicKey !== personPublicKey) return null;
+
+  const pin: PeerPin = { ...existing, personPublicKey, lastSeenAt: now };
+  pins[key] = pin;
+  store.write(pins);
+  return pin;
+}
+
+/**
+ * The `trustPersonKey` for one conversation: your own person key, or one pinned for one of
+ * `memberIds`. Reads the pins on every call, so a key pinned later counts from then.
+ */
+export function trustPinnedPersonKeys({
+  store,
+  scope,
+  memberIds,
+  ownPersonKey,
+}: {
+  store: PeerPinStore;
+  scope: IdentityScope;
+  memberIds: readonly string[];
+  /** From `derivePersonKeyPair`, public half. Your other devices carry it. */
+  ownPersonKey: Uint8Array;
+}): TrustPersonKey {
+  const own = base64Url(ownPersonKey);
+  return (certificate) => {
+    if (certificate.scope !== scope) return false;
+    const presented = base64Url(certificate.personPublicKey);
+    if (presented === own) return true;
+    return memberIds.some((id) => getPeerPin(store, scope, id)?.personPublicKey === presented);
+  };
 }

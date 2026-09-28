@@ -6,9 +6,12 @@
 import { base64Url } from "./base64";
 import {
   evaluatePeerKey,
+  evaluatePersonKey,
   type PeerKeyDecision,
   type PeerPinStore,
+  type PersonKeyDecision,
   pinPeerKey,
+  pinPersonKey,
 } from "./peer-keys";
 import type { IdentityScope } from "./scope";
 
@@ -21,6 +24,10 @@ export interface MemberKeyState {
    * rewriting it (GRYT-727). Catches the careless version only.
    */
   ownKeyRewritten?: boolean;
+  /** Their MLS person key binding, checked against the pin. `first` has been recorded. */
+  personKey: PersonKeyDecision;
+  /** Like `ownKeyRewritten`, for the person key, when `ownPersonKey` was given. */
+  ownPersonKeyRewritten?: boolean;
 }
 
 /**
@@ -31,6 +38,7 @@ export async function evaluateMemberKeys({
   store,
   scope,
   ownKey,
+  ownPersonKey = null,
   members,
   myServerUserId,
 }: {
@@ -42,11 +50,14 @@ export async function evaluateMemberKeys({
    * out, which turns the self-check off rather than making it fail.
    */
   ownKey: Uint8Array | null;
-  members: { serverUserId: string; dmKeyBinding?: string | null }[];
+  /** The public half of `derivePersonKeyPair`, for the same self-check. */
+  ownPersonKey?: Uint8Array | null;
+  members: { serverUserId: string; dmKeyBinding?: string | null; personKeyBinding?: string | null }[];
   /** Null before the member list has said which row is yours. */
   myServerUserId: string | null;
 }): Promise<Record<string, MemberKeyState>> {
   const mine = ownKey && myServerUserId ? base64Url(ownKey) : null;
+  const minePerson = ownPersonKey && myServerUserId ? base64Url(ownPersonKey) : null;
 
   const states: Record<string, MemberKeyState> = {};
 
@@ -64,7 +75,18 @@ export async function evaluateMemberKeys({
       pinPeerKey(store, scope, member.serverUserId, decision.verified);
     }
 
-    const state: MemberKeyState = { decision, isSelf };
+    const personKey = await evaluatePersonKey({
+      store,
+      scope,
+      memberId: member.serverUserId,
+      binding: member.personKeyBinding,
+    });
+    // Not while the DM key is in dispute: a person key would let MLS go ahead where sealing won't.
+    if (personKey.kind === "first" && !isSelf && (decision.kind === "first" || decision.kind === "known")) {
+      pinPersonKey(store, scope, member.serverUserId, personKey.verified);
+    }
+
+    const state: MemberKeyState = { decision, isSelf, personKey };
 
     if (isSelf && mine && decision.kind !== "none") {
       const shown =
@@ -72,6 +94,10 @@ export async function evaluateMemberKeys({
       // An unusable binding on your own row counts too: you published something
       // that verifies, so whatever is being shown is not it.
       state.ownKeyRewritten = shown !== mine;
+    }
+    if (isSelf && minePerson && personKey.kind !== "none") {
+      const shown = personKey.kind === "unusable" ? null : base64Url(personKey.verified.personPublicKey);
+      state.ownPersonKeyRewritten = shown !== minePerson;
     }
 
     states[member.serverUserId] = state;

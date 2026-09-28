@@ -119,6 +119,10 @@ before would have to compare again. That's the strict reading of the current rul
 could soften it: if the binding is signed by the exact identity key the two of them
 compared, carrying `comparedAt` across claims nothing new.
 
+Stage 1 softens it (GRYT-1507). A person key is only recorded when the identity already in
+the pin signed it, so `comparedAt` stays. A pin whose identity or DM key moves loses its
+person key along with `comparedAt`, and the next binding is recorded fresh.
+
 ### Your own devices
 
 - **Adding one.** The new device gets the seed (by pairing, or by typing the 24 words),
