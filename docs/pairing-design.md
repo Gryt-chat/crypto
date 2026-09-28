@@ -222,18 +222,39 @@ emoji stop that too.
 ### What the QR holds
 
 ```
-GRYT:1:<session id, 26 chars>:<pkN, 52 chars>
+*GRYT*1*<session id, 26 chars>*<pkN, 52 chars>
 ```
 
-Crockford base32 in upper case, so the whole string fits QR's alphanumeric mode: about 85
+Crockford base32 in upper case, so the whole string fits QR's alphanumeric mode: 87
 characters, which is a version 4 code and scans easily off a laptop screen. A server using
-its own auth server adds `:<relay origin>` at the end, and that part is checked against the
+its own auth server adds `*<relay origin>` at the end, and that part is checked against the
 auth server A is configured with. A never talks to a relay it was only told about by a QR.
 
 It isn't a URL. A `gryt://` link would let the phone's own camera open the approval screen
 from any QR anywhere, which is the easiest version of the phishing this is meant to make
 hard. Only the scanner inside Gryt reads it, and the system camera shows it as text
 (decided).
+
+That's also why it starts with `*` and uses `*` between the parts. The first version was
+`GRYT:1:…`. URI schemes ignore case, so camera apps read `GRYT:` as the `gryt:` scheme the
+app registers, and offered to open Gryt (GRYT-1577). A scheme has to start with a letter
+([RFC 3986 section 3.1](https://www.rfc-editor.org/rfc/rfc3986#section-3.1)), so a leading
+`*` can't be one. And with no colon anywhere, there's no `gryt:` further in for a detector
+to find either. Here's what camera apps check before they offer anything:
+
+- **URL.** Android scanners mostly run ZXing's `URIResultParser`, which wants a scheme or a
+  bare domain at the very start. iOS runs Apple's data detectors, which look through the
+  whole text. Neither has a link to find here, going by how they're documented. Nobody's
+  pointed a real phone at one yet.
+- **Phone, email, wifi and contacts.** These need `tel:`, `mailto:`, `WIFI:`, `MECARD:` and
+  the like at the start, an `@`, or text that's mostly digits. Base32 with letters in it
+  isn't any of those.
+- **Leading spaces.** ZXing trims the text before it checks it, so a space in front would
+  turn straight back into `GRYT:`.
+
+A relay origin is still a real `https://` address, so a detector that searches the whole
+text can offer to open it in a browser. That lands on the auth server's page, and there's
+nothing there to approve with.
 
 The version number means an old app refuses a code from a newer protocol rather than
 guessing.
