@@ -41,9 +41,10 @@ either way.
 - **`mls-authentication`** — the check `ts-mls` runs on every leaf: a
   certificate that verifies, for this server, for this leaf key, from a person
   key the client trusts. The client decides what it trusts.
-- **`mls-group`** — MLS groups for DMs: a device, its KeyPackages, create, add,
-  remove, update, process, encrypt and decrypt, and the group state as bytes to
-  save. Everything that goes over the network is MLS wire bytes.
+- **`mls-group`** — MLS groups for DMs: a device, its KeyPackages (each good for
+  30 days), create, add, remove, update, process, encrypt and decrypt, and the
+  group state as bytes to save. Everything that goes over the network is MLS wire
+  bytes.
 - **`mls-provider`** — the crypto `ts-mls` runs on: X25519 HPKE, Ed25519 and
   SHA-256 on `@noble`, for MLS suite 1 only. It lives here because Hermes has no
   `crypto.subtle`, and both of the library's own providers need it.

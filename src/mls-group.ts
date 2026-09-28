@@ -19,7 +19,6 @@ import {
   decodeMlsMessage,
   defaultCapabilities,
   defaultKeyPackageEqualityConfig,
-  defaultLifetime,
   defaultLifetimeConfig,
   emptyPskIndex,
   encodeGroupState,
@@ -136,15 +135,40 @@ function keyPackageOf(bytes: Uint8Array): KeyPackage {
 
 const capabilities = () => ({ ...defaultCapabilities(), ciphersuites: [MLS_CIPHERSUITE] });
 
-/** One KeyPackage for this device. Upload `keyPackage`; keep `privatePackage` until it's used. */
+/** In seconds. The same 30 days a server keeps MLS ciphertext for (design, decision 7). */
+export const MLS_KEY_PACKAGE_LIFETIME = 30 * 24 * 60 * 60;
+/** `notBefore` starts this far back, so a peer whose clock is up to an hour behind can use it. */
+export const MLS_KEY_PACKAGE_BACKDATE = 60 * 60;
+
+const nowSeconds = () => Math.floor(Date.now() / 1000);
+
+/** Throws unless `now` is inside the lifetime and the lifetime is 30 days or less. */
+function checkLifetime(kp: KeyPackage, now: number): number {
+  if (kp.leafNode.leafNodeSource !== "key_package") throw new Error("That KeyPackage has no lifetime.");
+  const { notBefore, notAfter } = kp.leafNode.lifetime;
+  if (notAfter < notBefore || notAfter - notBefore > BigInt(MLS_KEY_PACKAGE_LIFETIME)) {
+    throw new Error("That KeyPackage claims a lifetime longer than 30 days.");
+  }
+  if (BigInt(now) < notBefore) throw new Error("That KeyPackage isn't valid yet, so one of the two clocks is off.");
+  if (BigInt(now) > notAfter) throw new Error("That KeyPackage has expired.");
+  return Number(notAfter);
+}
+
+/**
+ * One KeyPackage for this device, good for 30 days from an hour before `now`. Upload
+ * `keyPackage`; keep `privatePackage` until it's used, and make a new one before `expiresAt`.
+ */
 export async function generateMlsKeyPackage(
   device: MlsDevice,
-): Promise<{ keyPackage: Uint8Array; privatePackage: Uint8Array; ref: string }> {
+  now: number = nowSeconds(),
+): Promise<{ keyPackage: Uint8Array; privatePackage: Uint8Array; ref: string; expiresAt: number }> {
+  if (!Number.isSafeInteger(now) || now < MLS_KEY_PACKAGE_BACKDATE) throw new Error("`now` is whole seconds since the epoch.");
   const cs = await mlsCiphersuite();
+  const notBefore = now - MLS_KEY_PACKAGE_BACKDATE;
   const { publicPackage, privatePackage } = await generateKeyPackageWithKey(
     { credentialType: "basic", identity: device.certificate },
     capabilities(),
-    defaultLifetime,
+    { notBefore: BigInt(notBefore), notAfter: BigInt(notBefore + MLS_KEY_PACKAGE_LIFETIME) },
     [],
     { signKey: device.signKey, publicKey: device.publicKey },
     cs,
@@ -155,6 +179,7 @@ export async function generateMlsKeyPackage(
     keyPackage: wire({ version: "mls10", wireformat: "mls_key_package", keyPackage: publicPackage }),
     privatePackage: new Uint8Array([1, ...keys[0], ...keys[1], ...keys[2]]),
     ref: base64Url(await makeKeyPackageRef(publicPackage, cs.hash)),
+    expiresAt: notBefore + MLS_KEY_PACKAGE_LIFETIME,
   };
 }
 
@@ -168,23 +193,25 @@ function readPrivatePackage(bytes: Uint8Array): PrivateKeyPackage {
 }
 
 /**
- * What the server checks on upload, and a client before adding: suite 1, signed by its leaf,
- * and carrying a certificate for this server. Whose person key it is stays the client's call.
+ * What the server checks on upload, and a client before adding: suite 1, in date, signed by its
+ * leaf, and carrying a certificate for this server. Whose person key it is stays the client's call.
  */
 export async function readMlsKeyPackage(
   bytes: Uint8Array,
   scope: IdentityScope,
-): Promise<{ certificate: DeviceCertificate; ref: string }> {
+  now: number = nowSeconds(),
+): Promise<{ certificate: DeviceCertificate; ref: string; expiresAt: number }> {
   const cs = await mlsCiphersuite();
   const kp = keyPackageOf(bytes);
   if (kp.cipherSuite !== MLS_CIPHERSUITE) throw new Error("That KeyPackage isn't suite 1.");
+  const expiresAt = checkLifetime(kp, now);
   if (!(await verifyKeyPackage(kp, cs.signature))) throw new Error("That KeyPackage's signature does not check out.");
   const certificate = deviceCertificateOf(kp.leafNode.credential, scope);
   if (!certificate) throw new Error("That KeyPackage has no device certificate for this server.");
   if (base64Url(certificate.leafSignatureKey) !== base64Url(kp.leafNode.signaturePublicKey)) {
     throw new Error("That KeyPackage's certificate is for a different leaf key.");
   }
-  return { certificate, ref: base64Url(await makeKeyPackageRef(kp, cs.hash)) };
+  return { certificate, ref: base64Url(await makeKeyPackageRef(kp, cs.hash)), expiresAt };
 }
 
 /** A new group with only this device in it. `groupId` is random unless given. */
@@ -241,10 +268,13 @@ async function commit(state: MlsGroupState, proposals: Proposal[]): Promise<MlsC
   };
 }
 
-/** Adds devices, and returns the Welcome for them. */
+/** Adds devices, and returns the Welcome for them. Refuses any KeyPackage out of date by this clock. */
 export async function addMlsMembers(state: MlsGroupState, keyPackages: Uint8Array[]): Promise<MlsCommit> {
   if (keyPackages.length === 0) throw new Error("Nobody to add.");
-  return commit(state, keyPackages.map((kp) => ({ proposalType: "add", add: { keyPackage: keyPackageOf(kp) } })));
+  const now = nowSeconds();
+  const decoded = keyPackages.map(keyPackageOf);
+  for (const kp of decoded) checkLifetime(kp, now);
+  return commit(state, decoded.map((kp) => ({ proposalType: "add", add: { keyPackage: kp } })));
 }
 
 /** Removes every leaf whose certificate carries one of these device ids. */

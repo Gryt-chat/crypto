@@ -153,7 +153,7 @@ with content, which is how Gryt already treats it for sealed DMs.
 
 | What | Kept | Notes |
 |---|---|---|
-| KeyPackages | Per device, 20 at a time plus one last-resort | Handed out once each, then deleted. The last-resort one gets reused when the rest run out, which RFC 9420 allows. A device tops them up when it connects |
+| KeyPackages | Per device, 20 at a time plus one last-resort | Handed out once each, then deleted. The last-resort one gets reused when the rest run out, which RFC 9420 allows. Each lasts 30 days (GRYT-1510), the server stops handing out expired ones, and a device tops them up and replaces old ones when it connects |
 | Welcomes | Per receiving device | Deleted once fetched, or after 30 days |
 | The group log | Per group, in order | Commits, proposals and application messages, each with a sequence number. Every device keeps a cursor |
 | Group records | Per group | The Gryt conversation or channel it belongs to, the current epoch, the members' device ids |
