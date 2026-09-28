@@ -65,7 +65,7 @@ function pair({ skN, skA, sessionId = SESSION } = {}) {
     "RIgV5E6BrDc_Cg6N5IKq8agCn6DGTOHIP86jm5fN-NB8Iy-vCvHN93tg0RcPuis");
 
   assert.equal(formatPairingQr({ sessionId: SESSION, publicKey: pkN }),
-    "GRYT:1:1MD2ED219SDPGXC2HYEAKDP3T0:DDTY38K9083XJG8CQS01CRSP8CP24NDMP5ZMV9S5B1TBDP2DP1EG");
+    "*GRYT*1*1MD2ED219SDPGXC2HYEAKDP3T0*DDTY38K9083XJG8CQS01CRSP8CP24NDMP5ZMV9S5B1TBDP2DP1EG");
 
   // Matrix's sas-emoji.json, in its order. Pinned whole, variation selectors included.
   assert.equal(PAIRING_EMOJI.length, 64);
@@ -266,7 +266,7 @@ function pair({ skN, skA, sessionId = SESSION } = {}) {
 {
   const key = createPairingKey().publicKey;
   const qr = formatPairingQr({ sessionId: SESSION, publicKey: key });
-  assert.equal(qr.length, 86);
+  assert.equal(qr.length, 87);
   assert.match(qr, /^[0-9A-Z $%*+\-./:]+$/, "QR's alphanumeric mode, so it stays a version 4 code");
   const back = parsePairingQr(qr);
   assert.ok(back.ok);
@@ -283,12 +283,43 @@ function pair({ skN, skA, sessionId = SESSION } = {}) {
 
   const reason = (s) => parsePairingQr(s).reason;
   assert.equal(reason("https://gryt.chat"), "not-pairing");
-  assert.equal(reason(qr.replace("GRYT:1:", "GRYT:2:")), "newer-version", "an old app refuses rather than guesses");
+  assert.equal(reason(qr.replace("*GRYT*1*", "*GRYT*2*")), "newer-version", "an old app refuses rather than guesses");
   assert.equal(reason(qr.toLowerCase()), "not-pairing");
-  assert.equal(reason(qr.replace("GRYT:1:", "GRYT:1:x")), "malformed");
+  assert.equal(reason(qr.replace("*GRYT*1*", "*GRYT*1*x")), "malformed");
   assert.equal(reason(qr.slice(0, -1) + "H"), "malformed", "padding bits have to be zero");
-  assert.equal(reason(`${qr}:HTTP://EVIL.EXAMPLE`), "malformed", "a relay the QR names has to be https");
-  assert.equal(reason(`${qr}:HTTPS://EVIL.EXAMPLE/PATH`), "malformed");
+  assert.equal(reason(`${qr}*HTTP://EVIL.EXAMPLE`), "malformed", "a relay the QR names has to be https");
+  assert.equal(reason(`${qr}*HTTPS://EVIL.EXAMPLE/PATH`), "malformed");
+  assert.equal(reason(`${own}*HTTPS://EVIL.EXAMPLE`), "malformed", "one relay, not a list");
+  assert.equal(reason(qr.slice(1)), "not-pairing");
+  assert.equal(reason(` ${qr}`), "not-pairing", "a scanner that trims would read something else");
+  assert.equal(reason(qr.replaceAll("*", ":")), "not-pairing", "the 0.8.0 shape is gone, not tolerated");
+}
+
+/* ── the QR isn't a link (GRYT-1577) ────────────────────────────────────── */
+
+// Camera apps match the text against these before offering to open it. `gryt:` is a scheme
+// Gryt registers, and schemes ignore case, so a `GRYT:` start was a link into the app.
+{
+  const key = createPairingKey().publicKey;
+  const plain = formatPairingQr({ sessionId: SESSION, publicKey: key });
+  const own = formatPairingQr({ sessionId: SESSION, publicKey: key, relayOrigin: "https://id.example.org" });
+  const dev = formatPairingQr({ sessionId: SESSION, publicKey: key, relayOrigin: "http://localhost:3004" });
+
+  for (const qr of [plain, own, dev]) {
+    // RFC 3986 section 3.1: scheme = ALPHA *( ALPHA / DIGIT / "+" / "-" / "." ), then ":".
+    assert.doesNotMatch(qr, /^[A-Za-z][A-Za-z0-9+\-.]*:/, "a URI scheme at the start");
+    // ZXing's URIResultParser, the one most Android scanner apps run.
+    assert.doesNotMatch(qr, /^[a-zA-Z][a-zA-Z0-9+\-.]+:/, "ZXing's URL-with-scheme check");
+    assert.doesNotMatch(qr, /^([a-zA-Z0-9-]+\.){1,6}[a-zA-Z]{2,}(:\d{1,5})?(\/|\?|$)/, "ZXing's bare-domain check");
+    assert.doesNotMatch(qr, /^(URL|URI|WIFI|MECARD|MATMSG|SMSTO|BIZCARD|BEGIN):/i, "a typed payload");
+    assert.doesNotMatch(qr, /@/, "an email address");
+    assert.equal(qr, qr.trim(), "no whitespace for a scanner to trim off");
+    assert.match(qr, /^[0-9A-Z $%*+\-./:]+$/, "still QR's alphanumeric mode");
+  }
+  // Nowhere in the text, not only at the start, since data detectors search the whole string.
+  assert.doesNotMatch(plain, /GRYT:/i);
+  assert.doesNotMatch(plain, /:/, "without a relay there's no colon at all");
+  assert.doesNotMatch(own.slice(0, own.lastIndexOf("*")), /:/, "the relay origin is the only part with one");
 }
 
 console.log("pairing: the vectors hold, a swapped key moves the emoji, and a changed, replayed or cross-session message is refused");

@@ -214,7 +214,10 @@ function derive(
 
 // ── The QR ─────────────────────────────────────────────────────────────
 
+// A leading `*` can't start a URI scheme, and `*` apart keeps `gryt:` out of the text
+// entirely, so a system camera sees text and not a link to open Gryt with.
 const QR_PREFIX = "GRYT";
+const QR_SEPARATOR = "*";
 const QR_VERSION = 1;
 
 /** The session id as the relay and the QR spell it: 26 characters of Crockford base32. */
@@ -249,7 +252,7 @@ export type ParsedPairingQr =
   | ({ ok: true } & PairingQr)
   | { ok: false; reason: "not-pairing" | "newer-version" | "malformed" };
 
-/** `GRYT:1:<session>:<pkN>[:<relay origin>]`, all upper case so QR's alphanumeric mode fits. */
+/** `*GRYT*1*<session>*<pkN>[*<relay origin>]`, all upper case so QR's alphanumeric mode fits. */
 export function formatPairingQr(qr: PairingQr): string {
   const parts = [
     QR_PREFIX,
@@ -262,13 +265,15 @@ export function formatPairingQr(qr: PairingQr): string {
     if (!origin) throw new Error("A relay origin is https://host, with an optional port.");
     parts.push(origin.toUpperCase());
   }
-  return parts.join(":");
+  return QR_SEPARATOR + parts.join(QR_SEPARATOR);
 }
 
 /** Strict: a scanner reads exactly what was drawn, so nothing here is forgiven. */
 export function parsePairingQr(text: string): ParsedPairingQr {
-  const parts = text.split(":");
-  if (parts.length < 2 || parts[0] !== QR_PREFIX) return { ok: false, reason: "not-pairing" };
+  const parts = text.slice(1).split(QR_SEPARATOR);
+  if (text[0] !== QR_SEPARATOR || parts.length < 2 || parts[0] !== QR_PREFIX) {
+    return { ok: false, reason: "not-pairing" };
+  }
   if (!/^[1-9][0-9]{0,5}$/.test(parts[1])) return { ok: false, reason: "malformed" };
   if (Number(parts[1]) > QR_VERSION) return { ok: false, reason: "newer-version" };
   if (parts.length < 4) return { ok: false, reason: "malformed" };
@@ -278,7 +283,7 @@ export function parsePairingQr(text: string): ParsedPairingQr {
   if (!sessionId || !publicKey) return { ok: false, reason: "malformed" };
   if (parts.length === 4) return { ok: true, sessionId, publicKey };
 
-  const origin = relayOrigin(parts.slice(4).join(":"));
+  const origin = parts.length === 5 ? relayOrigin(parts[4]) : null;
   if (!origin) return { ok: false, reason: "malformed" };
   return { ok: true, sessionId, publicKey, relayOrigin: origin };
 }
