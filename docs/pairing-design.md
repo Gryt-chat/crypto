@@ -215,7 +215,7 @@ auth server A is configured with. A never talks to a relay it was only told abou
 It isn't a URL. A `gryt://` link would let the phone's own camera open the approval screen
 from any QR anywhere, which is the easiest version of the phishing this is meant to make
 hard. Only the scanner inside Gryt reads it. The system camera shows it as text. That's a
-real trade against convenience, so it's question 3.
+trade against convenience, so it's question 3.
 
 The version number means an old app refuses a code from a newer protocol rather than
 guessing.
@@ -240,12 +240,12 @@ So brute force buys disruption at most. To keep even that impractical:
 - R counts failed code lookups per IP: 20 in ten minutes, then an hour's block.
 - Codes die on first claim, and after five minutes unclaimed.
 
-A botnet of 10,000 addresses at the limit makes about 1.2 million guesses an hour, which
-works out to one stray hit every few weeks at 1,000 live sessions. Gryt has nowhere near
-1,000 people linking devices at once.
+With the block, one address gets about 17 guesses an hour. A botnet of 10,000 addresses
+makes about 170,000 an hour, and at 1,000 live sessions that's one stray hit every nine
+months or so. Gryt has nowhere near 1,000 people linking devices at once.
 
-Six characters would be 30 bits and a hit roughly every hour at that rate. Eight costs two
-keystrokes.
+Six characters would be 30 bits, and the same botnet would hit a session every six hours.
+Eight costs two keystrokes.
 
 ### The envelope
 
@@ -257,7 +257,7 @@ One sealed message, A to N, JSON before sealing:
 | `seed` | The 32-byte seed | The person key, the guest keys, the DM keys and the backup key all come from it |
 | `keys` | Stored keys that don't come from the seed | What `exportLocalIdentities` already carries, for identities made before the seed existed |
 | `account` | `issuer`, `clientId`, `identityUrl`, `sub`, `username`. Absent for a guest | Which Keycloak N signs in with, and which account it has to end up as |
-| `servers` | Per server: `host`, `name`, `scope`, `nickname`, `scheme` | The scope matters: it's the lineage id from the server pins, and without it N derives a different guest key |
+| `servers` | Per server: `host`, `name`, `scope`, `nickname`, `scheme` | The scope is the lineage id from the server pins. Without it N derives a different guest key |
 | `pins` | The peer pins for each scope: thumbprint, DM key, person key, `comparedAt`, and whether they've been seen on MLS | Without them N would trust whatever keys a server hands it on first sight, and a server could downgrade N to v1 sealing |
 | `history` | The history key (32 random bytes), and the snapshot manifest | [Section 5](#5-history) |
 | `from` | A's device name | So N can say "linked from Sivert's iPhone" |
@@ -330,7 +330,7 @@ bytes stored, refusals by reason. No IPs, codes, session ids, user agents or loc
 **What R sees anyway.** Both devices' IPs, when they pair, and how much history went across,
 which says roughly how many messages somebody has. For an account, Keycloak sees a device
 grant at the same moment, so whoever runs both can tie a session to an account by time.
-That's Sivert, and it's written down on the security page rather than hidden.
+That's Sivert, and the security page says so.
 
 **Location.** Cloudflare adds `CF-IPCountry` to every request, and city and region headers
 once "Add visitor location headers" is turned on under Managed Transforms. R turns them
@@ -416,7 +416,7 @@ counting how often people hit the password prompt.
 ### The Keycloak client changes
 
 On `gryt-web`, through the admin API, applied by Sivert. Not in `gryt-realm.json`: a realm
-import deletes every account, and the realm file is exactly what took the stack down in
+import deletes every account, and the realm file is what took the stack down in
 GRYT-136.
 
 | Client attribute | Value | Why |
@@ -445,8 +445,8 @@ the "device code phishing" pattern: somebody gets a code for their own device, s
 you with a story, and if you're signed in to Keycloak and type it at
 `auth.gryt.chat/realms/gryt/device`, their device gets your Gryt session.
 
-What that session buys: a certificate for their key, so they can join servers as your
-account. It doesn't buy your messages. Without the seed they have no person key, and your
+That session gets them a certificate for their key, so they can join servers as your
+account. It doesn't get them your messages. Without the seed they have no person key, and your
 contacts refuse their MLS device. And decision 5 means no new password bundle to grind.
 
 Gryt's apps never ask anybody to go to that page and type a code. The security page
@@ -462,7 +462,7 @@ guest.
 So a guest skips step 8 entirely. Nothing about a guest touches Keycloak, and the relay
 never knows whether the person was a guest.
 
-The one trap is the scope. It's `srv:` plus the server's lineage id where one is pinned,
+N has to get the scope right. It's `srv:` plus the server's lineage id where one is pinned,
 and the host where not. If N worked it out for itself before it had the server pins, it
 could pick the host and derive a different key. So `servers[].scope` in the envelope is
 authoritative, and N writes the server pins before deriving anything.
@@ -484,7 +484,7 @@ The backup format from mls-design section 5, as it stands:
 - A manifest lists the chunks in order, with each one's id, scope, first and last time,
   message count, byte size and SHA-256.
 
-Pairing changes one thing: `historyKey` is 32 random bytes made for this transfer and sent
+The only change for pairing is that `historyKey` is 32 random bytes made for this transfer and sent
 in the envelope, instead of the seed-derived backup key. Stage 4 passes the backup key in
 the same place, so the code is written once.
 
@@ -559,8 +559,8 @@ but the emoji on N won't match anything on your device, and N checks the account
 The bearer tokens stop them posting as either side.
 
 **Phishing.** Somebody gets you to scan a QR from their device: "scan to sign in", "scan to
-verify your account". Discord's QR sign-in was abused this way for years. What stands in the
-way:
+verify your account". Discord's QR sign-in has been abused exactly like this. What stands in
+the way:
 
 - The QR only works in Gryt's own scanner, behind Settings, so a stranger's QR can't open
   the approval screen from the phone's camera.
@@ -574,11 +574,9 @@ way:
 - Afterwards, every other device you have shows "New device linked" with its name, and
   removing it is one tap.
 
-The emoji don't help here. The attacker's page can show whatever emoji their device shows.
-They protect against the relay, not against being talked into approving the wrong device.
-Somebody who's convinced to approve a device they don't control gives it everything, as
-with Signal and WhatsApp linking. The design makes that deliberate rather than accidental,
-and can't do more.
+The emoji don't help here, since the attacker's page can show whatever emoji their device
+shows. Somebody who's talked into approving a device they don't control gives it
+everything, as with Signal and WhatsApp linking.
 
 **A stolen unlocked phone.** The thief already has everything on it: the seed is in local
 storage, the history is in the archive. Pairing would let them copy it to a device of their
