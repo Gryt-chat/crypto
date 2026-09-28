@@ -44,6 +44,9 @@ From Sivert, 2026-09-28 and earlier. Not reopened here.
    [The QR](#what-the-qr-holds)
 4. **History chunks sit on the identity service's volume**, capped at 256 MiB per pairing
    and 2 GiB in total, and refused under 5 GiB free. [The relay](#the-relays-api)
+5. **A linked device's Keycloak session carries A's `AUTH_TIME`**, so its ID token says
+   when the person last typed their password.
+   [On success](#the-extension)
 
 ## The short version
 
@@ -375,6 +378,10 @@ only.
 
 ## 3. The account half
 
+Checked on a throwaway Keycloak 26.5.3, the same tag as `docker-compose.keycloak.yml`,
+with a `gryt-web` copied from the realm file (GRYT-1484, comment 4827). Nothing touched
+dev.lan.
+
 ### How RFC 8628 fits
 
 In RFC 8628 a device with no browser, a TV say, asks for a `device_code` and a
@@ -385,30 +392,35 @@ Here N is the TV and A is the other device, already signed in. The difference is
 the approval happens: inside Gryt on A, through a Keycloak extension, instead of on
 Keycloak's web page.
 
-1. After A approves, N calls `POST {issuer}/protocol/openid-connect/auth/device` with
-   `client_id=gryt-web`, `scope=openid profile email offline_access` (the scope the phone
-   already asks for), and `nonce` set to the pairing binding `kc` from
-   [the key schedule](#the-key-schedule).
-2. N sends the `user_code` to A, sealed. The `device_code` never leaves N.
+1. After A approves, N makes a PKCE verifier and calls
+   `POST {issuer}/protocol/openid-connect/auth/device` with `client_id=gryt-web`,
+   `scope=openid profile email offline_access` (the scope the phone already asks for),
+   `code_challenge` and `code_challenge_method=S256`, and `nonce` set to the pairing
+   binding `kc` from [the key schedule](#the-key-schedule). `gryt-web` enforces S256 on
+   this endpoint too. Without a challenge Keycloak answers `invalid_request`.
+2. N sends the `user_code` to A, sealed. The `device_code` and the verifier never leave N.
 3. A refreshes its access token and calls the extension with the token, the `user_code`
    and `kc`. On the phone, Face ID or the passcode comes first.
 4. N polls `POST {issuer}/protocol/openid-connect/token` with
-   `grant_type=urn:ietf:params:oauth:grant-type:device_code` every five seconds until the
-   tokens arrive, or the code runs out.
-5. N checks the ID token's `sub` against `account.sub` from the envelope. If they differ,
-   N throws everything away and says why.
+   `grant_type=urn:ietf:params:oauth:grant-type:device_code`, the `device_code` and the
+   `code_verifier`, every five seconds until the tokens arrive, or the code runs out.
+5. N checks the ID token's `sub` against `account.sub` from the envelope, and its `nonce`
+   against `kc`. If either differs, N throws everything away and says why.
 
 After that N is an ordinary signed-in device. It stores its tokens where it normally would,
 makes its own P-256 key and gets its own certificate from `id.gryt.chat`. Its Keycloak
-session is its own, so signing out on A leaves N signed in, and the other way round.
+session is its own: a different `sid`, the same `sub`, and an offline refresh token, so
+signing out on A leaves N signed in, and the other way round. Because N asked for
+`offline_access`, Keycloak drops N's online session after the first token and keeps only
+the offline one, which is what a normal sign-in on the phone does.
 
 ### Why an extension
 
 Keycloak has had the device grant since version 13, and the stack runs 26.5.3. It issues
 the codes and answers the polling. But it only approves a `user_code` on its own device
-page, against the Keycloak session cookie in that browser. There's no API that takes an
-access token and approves a code. The identity service can't do it either, because it has
-no Keycloak session to approve with.
+page, against the Keycloak session cookie in that browser, and that page always shows a
+consent screen. There's no API that takes an access token and approves a code. The
+identity service can't do it either, because it has no Keycloak session to approve with.
 
 The page would mean leaving the app for a browser, a Yes on Keycloak's grant screen, and a
 password for anybody whose browser session is older than the realm's 30-day limit. The
@@ -418,8 +430,10 @@ extension keeps the whole thing in the app.
 
 A Keycloak provider in `packages/auth/keycloak-pairing/`, written in Java.
 
-**What it is.** A `RealmResourceProvider` and its factory, which is Keycloak's supported
-way to add a REST endpoint under a realm. It adds one:
+**What it is.** A `RealmResourceProvider` and its factory, the usual way to add a REST
+endpoint under a realm. Keycloak counts it as an internal SPI, so it logs `KC-SERVICES0047`
+at startup ("This SPI is internal and may change without notice"). It works, and it's on
+the [upgrade list](#what-breaks-on-a-keycloak-upgrade) with the rest. It adds one endpoint:
 
 ```
 POST /realms/gryt/gryt-pairing/approve
@@ -434,19 +448,28 @@ other endpoints and no admin UI.
 
 1. **The token.** Keycloak's own bearer-token check (`AppAuthManager`'s authenticator):
    signed by the realm, not expired, and its user session still active. So a token from a
-   session that's been signed out or revoked is refused.
+   session that's been signed out or revoked is refused. It accepts a token whose session
+   is an offline one, which is what the apps have.
 2. **Where the token came from.** `azp` is `gryt-web`, and the token was issued in the
    last 60 seconds. A refreshes right before calling, so an older token that leaked from a
    log or a crash report can't be used.
-3. **The user.** Enabled, and not locked out by brute-force protection.
-4. **The code.** It exists, is still pending, hasn't expired, and belongs to `gryt-web`.
-5. **The binding.** The device code's stored `nonce` equals `binding`. Only a device that
-   took part in this pairing knows `kc`, so the extension only approves codes that came
-   out of a Gryt pairing A was in. Somebody who talks you into sending them a
-   `user_code` some other way can't get it approved through this endpoint.
+3. **The user.** Enabled, and not temporarily or permanently locked out by brute-force
+   protection.
+4. **No pending required actions.** Keycloak's device page walks somebody through a
+   pending required action first: verifying their email, a new password, terms. The
+   extension skips the browser, so it refuses anybody with one, the way Keycloak's own
+   CIBA grant does. The app says to finish it in Settings and try again.
+5. **The code.** Normalised with `OAuth2DeviceUserCodeProvider.format()`, which drops the
+   dash and upper-cases it. Then it has to exist, not be denied, still be pending, not have
+   expired, and belong to `gryt-web`.
+6. **The binding.** The device code's stored `nonce` equals `binding`, compared in constant
+   time. Only a device that took part in this pairing knows `kc`, so the extension only
+   approves codes that came out of a Gryt pairing A was in. Somebody who talks you into
+   sending them a `user_code` some other way can't get it approved through this endpoint.
 
-A wrong binding, or a code that fails check 4, denies the device code on the spot, so
-nobody gets a second try at the same code.
+A wrong binding denies the device code on the spot, and N's next poll gets
+`access_denied`. A retry with the right binding then gets "not pending", so nobody gets a
+second try at the same code.
 
 **"Same account".** The extension approves the code for whichever user the token belongs
 to. It can't know who N is supposed to be, since N has no account yet. The check that N
@@ -461,13 +484,47 @@ extension exists to avoid. What stands in for it:
 - On the phone, Face ID, Touch ID or the passcode before A refreshes its token.
 - On a Mac, Touch ID where there is one.
 - The 60-second freshness in check 2.
-- The binding in check 5.
+- The binding in check 6.
 
-**What it does on success.** The same as Keycloak's device page does after a browser
-sign-in: it makes a new user session for the user, with a client session for `gryt-web`
-carrying the scopes the device code asked for, and marks the device code approved with
-that session. The new session is N's alone. It records a note naming the session that
-approved it, so the admin console can show which device linked which.
+**What it does on success.** The same thing Keycloak's CIBA grant does to approve outside a
+browser (`CibaGrantType.createUserSession`), then the device grant's own approval:
+
+```java
+RootAuthenticationSessionModel root =
+    session.authenticationSessions().createRootAuthenticationSession(realm);
+AuthenticationSessionModel as = root.createAuthenticationSession(client);
+as.setProtocol(OIDCLoginProtocol.LOGIN_PROTOCOL);
+as.setAction(AuthenticatedClientSessionModel.Action.AUTHENTICATE.name());
+as.setClientNote(OIDCLoginProtocol.ISSUER, Urls.realmIssuer(baseUri, realm.getName()));
+as.setClientNote(OIDCLoginProtocol.SCOPE_PARAM, deviceCode.getScope());
+as.setAuthenticatedUser(user);
+AuthenticationManager.setClientScopesInSession(session, as);
+ClientSessionContext ctx =
+    AuthenticationProcessor.attachSession(as, null, session, realm, connection, event);
+UserSessionModel us = ctx.getClientSession().getUserSession();
+us.setNote(AuthenticationManager.AUTH_TIME, approvingSession.getNote(AuthenticationManager.AUTH_TIME));
+us.setNote("gryt.pairing.approvedBy", approvingSession.getId());
+DeviceGrantType.approveUserCode(session, realm, code, us.getId(), null); // false: expired
+DeviceGrantType.removeDeviceByUserCode(session, realm, code);
+session.authenticationSessions().removeRootAuthenticationSession(realm, root);
+```
+
+`attachSession` makes the user session and the `gryt-web` client session that the token
+step (`DeviceGrantType.process`) needs. The token step checks consent only when the client
+requires it, and `gryt-web` has `consentRequired: false`, so the extension writes no
+consent. If that setting ever changed, normal refreshes would already fail with
+`invalid_scope`, so it isn't a live case.
+
+Three things about the session N ends up with:
+
+- **Its signed-in time is A's.** It copies A's `AUTH_TIME` note (decided), so N's ID token
+  says when the person last typed their password.
+- **It records who approved it**, in `gryt.pairing.approvedBy`, so the admin console shows
+  which session linked which.
+- **Its IP address is A's**, because A is the one calling the endpoint. The admin console
+  shows A's address on N's session until N's next refresh.
+
+After a good approval the code is removed, so a second call with it gets "unknown code".
 
 **Rate limits.** Keycloak has nothing built in for custom endpoints, so the extension keeps
 counters in Keycloak's single-use object store, which expires them on its own:
@@ -477,6 +534,10 @@ counters in Keycloak's single-use object store, which expires them on its own:
 | Approvals per user | 5 an hour, 20 a day |
 | Failed calls per user | 10 an hour, then refused for an hour |
 | Calls per `user_code` | 1, whatever the outcome |
+
+The store has `put`, `get`, `replace`, `putIfAbsent` and `remove`, with a lifespan, but no
+atomic increment. So a counter is read and then replaced, and two calls at the same
+instant can both count as one. That's fine for limits this size, and they aren't exact.
 
 **Audit.** Every call fires a Keycloak event through `EventBuilder`, as
 `OAUTH2_DEVICE_VERIFY_USER_CODE` on success and its `_ERROR` form on failure. Custom event
@@ -488,7 +549,7 @@ the realm's event settings, which live only in the running realm. Nothing is log
 token or a code in it.
 
 **Packaging.** A Maven module, built inside Docker the way `login-theme/build.sh` builds
-the theme, so nobody needs a JVM on the host or on dev.lan. It compiles against
+the theme, so nobody needs a JVM on the host or on dev.lan. It compiles on Java 21 against
 `keycloak.version` 26.5.3, with the Keycloak jars as `provided`. The JAR is mounted into
 `/opt/keycloak/providers/gryt-pairing.jar`, next to the login theme. Keycloak runs plain
 `start`, not `--optimized`, so it picks the provider up on the next restart. Deploying it is
@@ -496,20 +557,24 @@ a restart of the `keycloak` container, which is Sivert's.
 
 ### What breaks on a Keycloak upgrade
 
-The endpoint type is public API. Approving a code the way the device page does needs
-classes Keycloak treats as internal: the device grant's
-`DeviceGrantType` and `OAuth2DeviceCodeModel`, the single-use object store's key format,
-and how a user session and a client session get created. The last one changed shape when
-sessions became persistent in 25. Keycloak logs a warning at startup for any provider that
-uses private SPI, and this one will.
+None of it is public API. Everything the extension touches is in `keycloak-services` or
+`server-spi-private`:
+
+- `RealmResourceProvider`, the endpoint type itself (`KC-SERVICES0047` at startup)
+- `AppAuthManager.BearerTokenAuthenticator` and `BruteForceProtector`
+- `DeviceEndpoint`, `DeviceGrantType`, `OAuth2DeviceCodeModel` and
+  `OAuth2DeviceUserCodeProvider`
+- `AuthenticationProcessor.attachSession` and `AuthenticationManager`, which is how a
+  session gets made, and which changed shape when sessions became persistent in 25
 
 What goes wrong, from least to most visible:
 
 - **A method moves or changes signature.** The build fails. That's the easy case.
-- **The device code's stored format changes.** It compiles, and approvals quietly stop
-  working, or approve with the wrong scopes.
-- **A class the provider needs is gone.** Keycloak can refuse to start with the provider
-  in `providers/`, which takes sign-in down for everybody.
+- **Behaviour changes under the same signature**, for example how a device code is stored
+  or what `attachSession` needs in the authentication session. It compiles, and approvals
+  quietly stop working, or approve with the wrong scopes.
+- **A class the provider needs is gone, or the SPI is dropped.** Keycloak can refuse to
+  start with the provider in `providers/`, which takes sign-in down for everybody.
 
 How CI catches each:
 
@@ -519,23 +584,24 @@ How CI catches each:
 - **Tests against a real Keycloak.** `packages/auth` has no Java tests today, so this adds
   the first: JUnit with Testcontainers' Keycloak module, starting the exact image with the
   JAR in `providers/`. Keycloak starting at all covers the third case. The tests then do a
-  whole device flow: start a device authorization, approve through the endpoint with a
-  user's token and the right nonce, poll, and check the tokens are for that user with the
-  requested scopes. Then the refusals: another client's token, a token older than 60
-  seconds, a disabled user, a wrong binding, an expired code, a code used twice, and the
-  rate limits. That covers the second case.
+  whole device flow with PKCE: start a device authorization, approve through the endpoint
+  with a user's token and the right nonce, poll, and check the tokens are for that user,
+  with the requested scopes, the nonce, and the approving session's `auth_time`. Then the
+  refusals: another client's token, a token older than 60 seconds, a disabled user, a
+  user with a pending required action, a wrong binding, an expired code, a code used
+  twice, and the rate limits. That covers the second case.
 - **A CI job** runs `mvn verify` on every PR that touches `keycloak-pairing/` or the
   compose file.
 
 **If it breaks in production anyway**, removing the JAR and restarting brings Keycloak
 back as it was. The apps treat a `404` from the endpoint as "no extension here" and fall
 back to opening Keycloak's own device page for the same code, built from A's own issuer.
-That fallback is the only use of the page. It's slower and may ask for a password, and it
-keeps pairing working while the extension is fixed.
+That fallback is the only use of the page. It's slower, shows a consent screen and may ask
+for a password, and it keeps pairing working while the extension is fixed.
 
 ### The Keycloak client changes
 
-On `gryt-web` (decided), through the admin API, applied by Sivert. Not in
+On `gryt-web` (decided), through the admin REST API, applied by Sivert. Not in
 `gryt-realm.json`: a realm import deletes every account, and the realm file is what took
 the stack down in GRYT-136.
 
@@ -545,24 +611,26 @@ the stack down in GRYT-136.
 | `oauth2.device.code.lifespan` | `"300"` | Five minutes, matching a session, instead of the realm's default ten |
 | `oauth2.device.polling.interval` | `"5"` | The RFC's default, written down |
 
+All three are strings, and the names are the constants in Keycloak's `OAuth2DeviceConfig`.
+The admin console only has the on/off toggle. The two numbers have no field there, so the
+script is the only way to set them. The realm-wide defaults have different names,
+`oauth2DeviceCodeLifespan` and `oauth2DevicePollingInterval`, and stay as they are. On the
+test Keycloak, the device endpoint answered `unauthorized_client` before the change and
+`200` with `expires_in: 300` after.
+
 Nothing else changes: the client stays public, with PKCE and the same redirects. A linked
 device is exactly like one that signed in normally.
 
-A script, `bootstrap/enable_device_grant.py`, does the read-modify-write the same way
-`update_keycloak_client.py` does, prints the client before and after, and is safe to run
-twice. It runs with `--no-deps` and the admin credentials passed at run time, the way the
-other one-shots do, since `admin` is normally disabled.
+A script, `bootstrap/enable_device_grant.py`, does the read-modify-write with a GET and a
+PUT on `/admin/realms/{realm}/clients/{id}`, the same way `update_keycloak_client.py` does.
+It prints the client before and after, and is safe to run twice. It runs with `--no-deps`
+and the admin credentials passed at run time, the way the other one-shots do, since
+`admin` is normally disabled.
 
-### To check on the dev stack first
+### Not yet tested live
 
-These come from reading Keycloak's source, not from a running 26.5:
-
-- The three attribute names. Set the toggle once in the admin console, read the client
-  back, and copy what Keycloak wrote.
-- That the device authorization endpoint keeps `nonce` on the stored device code. If it
-  doesn't, the binding in check 5 goes, and the rest stands.
-- That the token step doesn't ask for a consent the extension never recorded. If it does,
-  the extension records the grant for `gryt-web` as part of approving.
+The 60-second token age check in the extension was written for the test and not run
+against an old token. The Testcontainers suite covers it.
 
 ### What this opens up
 
