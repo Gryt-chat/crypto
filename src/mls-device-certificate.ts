@@ -124,7 +124,8 @@ export function readDeviceCertificate(bytes: Uint8Array, expectedScope: Identity
   let offset = 0;
   const take = (n: number) => {
     if (offset + n > bytes.length) throw new Error("That device certificate is cut short.");
-    const out = bytes.slice(offset, offset + n);
+    // A copy, not slice: a Node Buffer's slice shares the pool, and DataView reads its .buffer.
+    const out = new Uint8Array(bytes.subarray(offset, offset + n));
     offset += n;
     return out;
   };

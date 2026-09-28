@@ -160,6 +160,14 @@ const certificate = (over = {}) =>
   assert.equal(read.signedAt, 1758800000);
   assert.equal(hex(read.personPublicKey), hex(KARI.publicKey));
 
+  // socket.io hands ts-mls a Buffer from the shared pool, whose .buffer starts elsewhere.
+  const pooled = Buffer.from(bytes);
+  assert.ok(pooled.byteOffset > 0 || pooled.buffer.byteLength > pooled.length, "the Buffer isn't pooled");
+  assert.equal(readDeviceCertificate(pooled, SCOPE).signedAt, 1758800000);
+  const offsetView = new Uint8Array(bytes.length + 7);
+  offsetView.set(bytes, 7);
+  assert.equal(readDeviceCertificate(offsetView.subarray(7), SCOPE).deviceName, "Kari’s phone");
+
   for (let i = 0; i < bytes.length; i++) {
     const bad = bytes.slice();
     bad[i] ^= 0x01;
