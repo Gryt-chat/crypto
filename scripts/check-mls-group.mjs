@@ -22,6 +22,9 @@ import {
   generateMlsKeyPackage,
   inspectMlsMessage,
   joinMlsGroup,
+  MLS_CIPHERSUITE,
+  MLS_KEY_PACKAGE_BACKDATE,
+  MLS_KEY_PACKAGE_LIFETIME,
   mlsCiphersuite,
   mlsGroupInfo,
   mlsGroupMembers,
@@ -31,7 +34,14 @@ import {
   removeMlsMembers,
   updateMlsLeaf,
 } from "../dist/index.js";
-import { createCommit, decodeMlsMessage, encodeMlsMessage } from "ts-mls";
+import {
+  createCommit,
+  decodeMlsMessage,
+  defaultCapabilities,
+  defaultLifetime,
+  encodeMlsMessage,
+  generateKeyPackageWithKey,
+} from "ts-mls";
 
 const SCOPE = asIdentityScope("srv:engine");
 const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
@@ -64,6 +74,61 @@ const kpOla = await generateMlsKeyPackage(olaPhone);
   bad[bad.length - 3] ^= 1;
   await assert.rejects(readMlsKeyPackage(bad, SCOPE), "a KeyPackage with a broken signature was accepted");
   await assert.rejects(readMlsKeyPackage(kpOla.keyPackage.slice(0, -1), SCOPE), /one whole MLS message/);
+}
+
+/* ── KeyPackages last 30 days from an hour back, edges included ─────────── */
+
+{
+  const DAY = 24 * 60 * 60;
+  const now = Math.floor(Date.now() / 1000);
+  assert.equal(MLS_KEY_PACKAGE_LIFETIME, 30 * DAY);
+
+  const kp = await generateMlsKeyPackage(olaPhone, now);
+  const from = now - MLS_KEY_PACKAGE_BACKDATE;
+  const to = from + MLS_KEY_PACKAGE_LIFETIME;
+  assert.equal(kp.expiresAt, to);
+  const lifetime = decodeMlsMessage(kp.keyPackage, 0)[0].keyPackage.leafNode.lifetime;
+  assert.deepEqual(lifetime, { notBefore: BigInt(from), notAfter: BigInt(to) });
+
+  await assert.rejects(readMlsKeyPackage(kp.keyPackage, SCOPE, from - 1), /isn't valid yet/);
+  assert.equal((await readMlsKeyPackage(kp.keyPackage, SCOPE, from)).expiresAt, to);
+  assert.equal((await readMlsKeyPackage(kp.keyPackage, SCOPE, to)).expiresAt, to);
+  await assert.rejects(readMlsKeyPackage(kp.keyPackage, SCOPE, to + 1), /expired/);
+  assert.equal((await readMlsKeyPackage(kpOla.keyPackage, SCOPE)).expiresAt > now + 29 * DAY, true);
+
+  // Lifetimes the engine never writes: ts-mls's own default runs to 2^63, and one runs backwards.
+  const cs = await mlsCiphersuite();
+  const custom = async (lt) => {
+    const { publicPackage } = await generateKeyPackageWithKey(
+      { credentialType: "basic", identity: olaPhone.certificate },
+      { ...defaultCapabilities(), ciphersuites: [MLS_CIPHERSUITE] },
+      lt,
+      [],
+      { signKey: olaPhone.signKey, publicKey: olaPhone.publicKey },
+      cs,
+    );
+    return encodeMlsMessage({ version: "mls10", wireformat: "mls_key_package", keyPackage: publicPackage });
+  };
+  const forever = await custom(defaultLifetime);
+  const overlong = await custom({ notBefore: BigInt(from), notAfter: BigInt(to + 1) });
+  const backwards = await custom({ notBefore: BigInt(to), notAfter: BigInt(from) });
+  for (const bad of [forever, overlong, backwards]) {
+    await assert.rejects(readMlsKeyPackage(bad, SCOPE, now), /longer than 30 days/);
+  }
+
+  // Adding goes by this device's clock, which is also the one ts-mls checks against.
+  const group = await createMlsGroup(kariLaptop, trust);
+  const at = async (offset) => (await generateMlsKeyPackage(olaPhone, now + offset)).keyPackage;
+  await assert.rejects(addMlsMembers(group, [await at(-31 * DAY)]), /expired/);
+  await assert.rejects(addMlsMembers(group, [await at(2 * 60 * 60)]), /isn't valid yet/);
+  await assert.rejects(addMlsMembers(group, [kpKariPhone.keyPackage, forever]), /longer than 30 days/);
+  await assert.rejects(addMlsMembers(group, [overlong]), /longer than 30 days/);
+  for (const offset of [-(30 * DAY - 2 * 60 * 60), 50 * 60]) {
+    const ok = await addMlsMembers(group, [await at(offset)]);
+    assert.equal(mlsGroupInfo(ok.state).epoch, 1n, `a KeyPackage made ${offset} seconds from now wasn't added`);
+  }
+  assert.equal(mlsGroupInfo(group).epoch, 0n);
+  await assert.rejects(generateMlsKeyPackage(olaPhone, 1.5), /whole seconds/);
 }
 
 /* ── Kari's laptop starts the DM and adds Ola and her own phone ────────── */
@@ -191,4 +256,4 @@ async function send(from, to, words) {
   assert.equal(base64Url(decodeMlsGroupState(bytes, trust).groupContext.groupId), mlsGroupInfo(ola).groupId);
 }
 
-console.log("mls-group: a DM of three devices creates, adds, talks, removes and updates through saved state, pads, and refuses what a DM shouldn't take");
+console.log("mls-group: a DM of three devices creates, adds, talks, removes and updates through saved state, pads, refuses what a DM shouldn't take, and only adds KeyPackages inside their 30 days");
