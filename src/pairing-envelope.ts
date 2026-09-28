@@ -4,6 +4,7 @@
  */
 
 import { base64Url, base64UrlDecode } from "./base64";
+import { type HistoryManifest, parseHistoryManifest } from "./history-chunks";
 import { type IdentityBackupEntry, isIdentityBackupEntry } from "./identity-backup";
 import type { PeerPin } from "./peer-keys";
 import { asIdentityScope, type IdentityScope } from "./scope";
@@ -38,8 +39,8 @@ export interface PairingPin extends PeerPin {
 export interface PairingHistory {
   /** 32 random bytes, made for this transfer. */
   key: Uint8Array;
-  /** The snapshot manifest. Its shape belongs to the history chunk format, which checks it. */
-  manifest: unknown;
+  /** The snapshot manifest, checked by the chunk format's own parser. */
+  manifest: HistoryManifest;
 }
 
 export interface PairingEnvelope {
@@ -167,8 +168,14 @@ export function decodePairingEnvelope(bytes: Uint8Array): PairingEnvelope {
 
   if (raw.account !== undefined) envelope.account = readAccount(raw.account);
   if (raw.history !== undefined) {
-    if (!isObject(raw.history) || raw.history.manifest === undefined) refuse("history");
-    envelope.history = { key: bytesOf(raw.history.key, KEY_BYTES, "history"), manifest: raw.history.manifest };
+    if (!isObject(raw.history)) refuse("history");
+    let manifest: HistoryManifest;
+    try {
+      manifest = parseHistoryManifest(raw.history.manifest);
+    } catch {
+      refuse("history");
+    }
+    envelope.history = { key: bytesOf(raw.history.key, KEY_BYTES, "history"), manifest };
   }
   return envelope;
 }
