@@ -12,6 +12,7 @@ export * from "./conversation-encryption";
 export * from "./crockford";
 export * from "./dm-key-binding";
 export * from "./dm-keys";
+export * from "./history-chunks";
 export * from "./identity-backup";
 export * from "./identity-vault";
 export * from "./member-keys";

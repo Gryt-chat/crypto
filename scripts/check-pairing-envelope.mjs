@@ -45,7 +45,10 @@ const FULL = {
     { host: "other.example", name: "", scope: "other.example" },
   ],
   pins: { "srv:abc": { user_1: PIN, user_2: { thumbprint: "t2", dmPublicKey: PIN.dmPublicKey, firstSeenAt: 5, lastSeenAt: 6 } } },
-  history: { key: seq(32, 19), manifest: { chunks: [{ id: "c1" }] } },
+  history: {
+    key: seq(32, 19),
+    manifest: { v: 1, chunks: [{ id: base64Url(seq(16, 5)), scope: "srv:abc", first: 1, last: 2, count: 2, bytes: 100, sha256: base64Url(seq(32, 5)) }] },
+  },
   from: "Sivert's iPhone",
 };
 
@@ -109,6 +112,7 @@ const raw = (overrides) => {
   refused({ pins: { "srv:abc": { u: { ...PIN, seenOnMls: "yes" } } } }, /pins/);
   refused({ pins: { "srv:abc": [] } }, /pins/);
   refused({ history: { key: base64Url(seq(32, 1)) } }, /history/);
+  refused({ history: { key: base64Url(seq(32, 1)), manifest: { v: 1, chunks: [{ id: "c1" }] } } }, /history/);
   refused({ from: undefined }, /from/);
 
   const proto = new TextDecoder().decode(raw({})).replace('"pins":{"srv:abc"', '"pins":{"__proto__"');

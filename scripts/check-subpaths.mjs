@@ -33,6 +33,7 @@ const MODULES = [
   "crockford",
   "dm-key-binding",
   "dm-keys",
+  "history-chunks",
   "identity-backup",
   "identity-vault",
   "member-keys",
