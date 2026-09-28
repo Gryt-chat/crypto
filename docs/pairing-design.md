@@ -33,6 +33,18 @@ From Sivert, 2026-09-28 and earlier. Not reopened here.
 - **The server never holds anything that unlocks an account or messages**, not even
   slowly.
 
+## Decided on this design (Sivert, 2026-09-28)
+
+1. **Approving the account session happens in the app**, through a Keycloak extension in
+   `packages/auth`, not on Keycloak's device page in a browser.
+   [The extension](#the-extension)
+2. **The device grant goes on `gryt-web`**, so a linked device is exactly like one that
+   signed in normally. [Client changes](#the-keycloak-client-changes)
+3. **Only Gryt's own scanner reads a pairing QR.** The phone's camera app can't open one.
+   [The QR](#what-the-qr-holds)
+4. **History chunks sit on the identity service's volume**, capped at 256 MiB per pairing
+   and 2 GiB in total, and refused under 5 GiB free. [The relay](#the-relays-api)
+
 ## The short version
 
 - The new device makes a one-off X25519 key and asks the relay for a session. It shows a
@@ -45,7 +57,7 @@ From Sivert, 2026-09-28 and earlier. Not reopened here.
   rough location, and an Approve button that runs out after 60 seconds.
 - On Approve, the approving device sends one sealed envelope: the seed, the server list,
   the pins, a history key and the history manifest. For an account it then approves the
-  new device's Keycloak `user_code` on Keycloak's own device page.
+  new device's Keycloak `user_code` inside the app, through a Keycloak extension.
 - The new device keeps nothing until it's signed in and the account it got matches the
   one in the envelope. Guests skip the Keycloak step.
 - History goes up as chunks in the backup format from mls-design section 5, newest first,
@@ -53,8 +65,8 @@ From Sivert, 2026-09-28 and earlier. Not reopened here.
   everything after an hour.
 - The new device publishes KeyPackages on each server. The approving device adds it to
   every group straight away, then sends the messages between its snapshot and those adds.
-- Nothing in `packages/server` has to change. `packages/auth` gets the relay and a
-  Keycloak client setting that Sivert applies through the admin API.
+- Nothing in `packages/server` has to change. `packages/auth` gets the relay, the
+  Keycloak extension, and a client setting that Sivert applies through the admin API.
 
 ## 1. What exists today
 
@@ -138,8 +150,8 @@ Both key pairs are made fresh for each session and dropped when it ends.
 7. **A approves.** On the phone that's behind Face ID or the passcode. A sends the sealed
    envelope ([contents](#the-envelope)). N checks it arrived before its own deadline.
 8. **Accounts only: the session.** N starts a device authorization at Keycloak, using the
-   issuer from the envelope, and sends the `user_code` to A sealed. A opens Keycloak's
-   device page for that code. N polls Keycloak's token endpoint. See
+   issuer from the envelope, and sends the `user_code` to A sealed. A approves it through
+   the Keycloak extension. N polls Keycloak's token endpoint. See
    [the account half](#3-the-account-half).
 9. **N commits.** Only now does N write anything: the seed, the keys, the server list, the
    pins. For an account it first checks the `sub` in its new ID token matches the one in
@@ -161,7 +173,10 @@ prk    = HKDF-Extract(salt = th, ikm = dh)
 kNA    = HKDF-Expand(prk, "gryt-pair-v1 n to a", 32)
 kAN    = HKDF-Expand(prk, "gryt-pair-v1 a to n", 32)
 sas    = HKDF-Expand(prk, "gryt-pair-v1 emoji", 3)
+kc     = HKDF-Expand(prk, "gryt-pair-v1 keycloak", 16)
 ```
+
+`kc` binds the Keycloak device code to this pairing. See [the extension](#the-extension).
 
 `lp` is a two-byte length prefix, for the reason `comparison-code.ts` uses JSON: two
 different inputs mustn't join into the same bytes.
@@ -214,8 +229,8 @@ auth server A is configured with. A never talks to a relay it was only told abou
 
 It isn't a URL. A `gryt://` link would let the phone's own camera open the approval screen
 from any QR anywhere, which is the easiest version of the phishing this is meant to make
-hard. Only the scanner inside Gryt reads it. The system camera shows it as text. That's a
-trade against convenience, so it's question 3.
+hard. Only the scanner inside Gryt reads it, and the system camera shows it as text
+(decided).
 
 The version number means an old app refuses a code from a newer protocol rather than
 guessing.
@@ -315,8 +330,8 @@ ten minutes, then an hour's block. 1 GiB of chunk uploads a day. The IP comes fr
 **The disk.** The chunks go on the `gryt-identity-data` volume, which is on the same disk
 as the Keycloak Postgres. A full disk takes the auth database down, so R refuses uploads
 once all its chunks together reach 2 GiB, or once free space on the volume falls under
-5 GiB, whichever comes first. All four limits are environment variables. Where the chunks
-live is question 4.
+5 GiB, whichever comes first. All four limits are environment variables. Keeping the
+chunks on this volume with these caps is decided.
 
 **What R stores.** In memory: the sessions (ids, codes, commitments, public keys, sealed
 messages, states, times) and the rate-limit counters by IP, for as long as their window. On
@@ -363,61 +378,166 @@ only.
 ### How RFC 8628 fits
 
 In RFC 8628 a device with no browser, a TV say, asks for a `device_code` and a
-`user_code`, shows the `user_code`, and polls. The person goes to a web page on another
-device, signs in, types the code and approves. Then the polling device gets its tokens.
+`user_code`, shows the `user_code`, and polls. Somebody approves the code on another
+device, and the polling device gets its tokens.
 
-Here N is the TV and A is the other device, already signed in.
+Here N is the TV and A is the other device, already signed in. The difference is where
+the approval happens: inside Gryt on A, through a Keycloak extension, instead of on
+Keycloak's web page.
 
 1. After A approves, N calls `POST {issuer}/protocol/openid-connect/auth/device` with
-   `client_id=gryt-web` and `scope=openid profile email offline_access`, the scope the
-   phone already asks for.
+   `client_id=gryt-web`, `scope=openid profile email offline_access` (the scope the phone
+   already asks for), and `nonce` set to the pairing binding `kc` from
+   [the key schedule](#the-key-schedule).
 2. N sends the `user_code` to A, sealed. The `device_code` never leaves N.
-3. A opens `{issuer}/device?user_code=...` in the browser it signs in with. A builds that
-   URL from its own configured issuer, never from anything N sent, so a hostile N can't
-   point A at a phishing page.
+3. A refreshes its access token and calls the extension with the token, the `user_code`
+   and `kc`. On the phone, Face ID or the passcode comes first.
 4. N polls `POST {issuer}/protocol/openid-connect/token` with
    `grant_type=urn:ietf:params:oauth:grant-type:device_code` every five seconds until the
    tokens arrive, or the code runs out.
 5. N checks the ID token's `sub` against `account.sub` from the envelope. If they differ,
-   N throws everything away and says why. That catches a browser signed in to a different
-   account than the app.
+   N throws everything away and says why.
 
 After that N is an ordinary signed-in device. It stores its tokens where it normally would,
-makes its own P-256 key and gets its own certificate from `id.gryt.chat`.
+makes its own P-256 key and gets its own certificate from `id.gryt.chat`. Its Keycloak
+session is its own, so signing out on A leaves N signed in, and the other way round.
 
-### Can Keycloak do it on its own?
+### Why an extension
 
-The grant, yes. Keycloak has had RFC 8628 since version 13, and the stack runs 26.5.3. It
-issues the codes, runs the device page and answers the polling.
+Keycloak has had the device grant since version 13, and the stack runs 26.5.3. It issues
+the codes and answers the polling. But it only approves a `user_code` on its own device
+page, against the Keycloak session cookie in that browser. There's no API that takes an
+access token and approves a code. The identity service can't do it either, because it has
+no Keycloak session to approve with.
 
-The approval, only in a browser. Keycloak approves a `user_code` on its device page,
-against the Keycloak session cookie in that browser. There's no API that takes an access
-token and approves a code, and the identity service can't approve one for anybody, because
-it has no Keycloak session to approve with.
+The page would mean leaving the app for a browser, a Yes on Keycloak's grant screen, and a
+password for anybody whose browser session is older than the realm's 30-day limit. The
+extension keeps the whole thing in the app.
 
-So there are two ways to do step 3:
+### The extension
 
-- **Keycloak's own page.** A opens it in the browser it signs in with: the page itself on
-  the web, the system browser from Electron, and `expo-web-browser` on the phone, which
-  shares Safari's or Chrome's cookies unless it was asked for an ephemeral session. With a
-  live cookie the page shows Keycloak's grant screen and one Yes. With no cookie, it asks
-  for the password first. The realm ends a browser session after 7 days idle and 30 days
-  at most, so anybody who signed in more than a month ago types their password. From
-  Keycloak's source, the device flow always shows the grant screen, whatever the client's
-  consent setting. That needs checking on the dev stack.
-- **A Keycloak extension.** A small Java provider in `packages/auth` adding an endpoint
-  that takes A's access token and a `user_code` and approves it. Approval then stays in the
-  app. But it's Java code built against Keycloak's internal classes, which change between
-  versions, on the service every Gryt account depends on.
+A Keycloak provider in `packages/auth/keycloak-pairing/`, written in Java.
 
-Question 1 asks which. The recommendation is Keycloak's page for the first version, and
-counting how often people hit the password prompt.
+**What it is.** A `RealmResourceProvider` and its factory, which is Keycloak's supported
+way to add a REST endpoint under a realm. It adds one:
+
+```
+POST /realms/gryt/gryt-pairing/approve
+Authorization: Bearer <A's access token>
+{ "user_code": "...", "binding": "<kc, base64url>" }
+```
+
+It answers `204` when the code is approved, and a short error code otherwise. It has no
+other endpoints and no admin UI.
+
+**What it checks, in order.** Any failure stops it.
+
+1. **The token.** Keycloak's own bearer-token check (`AppAuthManager`'s authenticator):
+   signed by the realm, not expired, and its user session still active. So a token from a
+   session that's been signed out or revoked is refused.
+2. **Where the token came from.** `azp` is `gryt-web`, and the token was issued in the
+   last 60 seconds. A refreshes right before calling, so an older token that leaked from a
+   log or a crash report can't be used.
+3. **The user.** Enabled, and not locked out by brute-force protection.
+4. **The code.** It exists, is still pending, hasn't expired, and belongs to `gryt-web`.
+5. **The binding.** The device code's stored `nonce` equals `binding`. Only a device that
+   took part in this pairing knows `kc`, so the extension only approves codes that came
+   out of a Gryt pairing A was in. Somebody who talks you into sending them a
+   `user_code` some other way can't get it approved through this endpoint.
+
+A wrong binding, or a code that fails check 4, denies the device code on the spot, so
+nobody gets a second try at the same code.
+
+**"Same account".** The extension approves the code for whichever user the token belongs
+to. It can't know who N is supposed to be, since N has no account yet. The check that N
+ends up as the right account is N's, in step 5 above: the `sub` in the envelope comes
+from A over the sealed channel, and N compares it with its new ID token.
+
+**No step-up on `auth_time`.** The apps stay signed in with `offline_access`, so a token's
+`auth_time` is when the person last typed their password, which can be up to 90 days ago.
+Asking for a recent one would mean a password on every approval, which is what the
+extension exists to avoid. What stands in for it:
+
+- On the phone, Face ID, Touch ID or the passcode before A refreshes its token.
+- On a Mac, Touch ID where there is one.
+- The 60-second freshness in check 2.
+- The binding in check 5.
+
+**What it does on success.** The same as Keycloak's device page does after a browser
+sign-in: it makes a new user session for the user, with a client session for `gryt-web`
+carrying the scopes the device code asked for, and marks the device code approved with
+that session. The new session is N's alone. It records a note naming the session that
+approved it, so the admin console can show which device linked which.
+
+**Rate limits.** Keycloak has nothing built in for custom endpoints, so the extension keeps
+counters in Keycloak's single-use object store, which expires them on its own:
+
+| Limit | Value |
+|---|---|
+| Approvals per user | 5 an hour, 20 a day |
+| Failed calls per user | 10 an hour, then refused for an hour |
+| Calls per `user_code` | 1, whatever the outcome |
+
+**Audit.** Every call fires a Keycloak event through `EventBuilder`, as
+`OAUTH2_DEVICE_VERIFY_USER_CODE` on success and its `_ERROR` form on failure. Custom event
+types aren't allowed, so the details carry `gryt_pairing=true`, the client, the reason for
+a failure, and the approving and new session ids. The realm has `user-event-metrics` on, so
+these show up in the Prometheus metrics Grafana already reads, and an alert on a burst of
+failures goes in `monitoring/alert.rules.yml`. Whether events are also stored depends on
+the realm's event settings, which live only in the running realm. Nothing is logged with a
+token or a code in it.
+
+**Packaging.** A Maven module, built inside Docker the way `login-theme/build.sh` builds
+the theme, so nobody needs a JVM on the host or on dev.lan. It compiles against
+`keycloak.version` 26.5.3, with the Keycloak jars as `provided`. The JAR is mounted into
+`/opt/keycloak/providers/gryt-pairing.jar`, next to the login theme. Keycloak runs plain
+`start`, not `--optimized`, so it picks the provider up on the next restart. Deploying it is
+a restart of the `keycloak` container, which is Sivert's.
+
+### What breaks on a Keycloak upgrade
+
+The endpoint type is public API. Approving a code the way the device page does needs
+classes Keycloak treats as internal: the device grant's
+`DeviceGrantType` and `OAuth2DeviceCodeModel`, the single-use object store's key format,
+and how a user session and a client session get created. The last one changed shape when
+sessions became persistent in 25. Keycloak logs a warning at startup for any provider that
+uses private SPI, and this one will.
+
+What goes wrong, from least to most visible:
+
+- **A method moves or changes signature.** The build fails. That's the easy case.
+- **The device code's stored format changes.** It compiles, and approvals quietly stop
+  working, or approve with the wrong scopes.
+- **A class the provider needs is gone.** Keycloak can refuse to start with the provider
+  in `providers/`, which takes sign-in down for everybody.
+
+How CI catches each:
+
+- **The version lives in one place.** A check fails CI unless the image tag in
+  `docker-compose.keycloak.yml` and `keycloak.version` in the `pom.xml` are the same. A
+  Keycloak bump has to move both in one PR, and that PR runs everything below.
+- **Tests against a real Keycloak.** `packages/auth` has no Java tests today, so this adds
+  the first: JUnit with Testcontainers' Keycloak module, starting the exact image with the
+  JAR in `providers/`. Keycloak starting at all covers the third case. The tests then do a
+  whole device flow: start a device authorization, approve through the endpoint with a
+  user's token and the right nonce, poll, and check the tokens are for that user with the
+  requested scopes. Then the refusals: another client's token, a token older than 60
+  seconds, a disabled user, a wrong binding, an expired code, a code used twice, and the
+  rate limits. That covers the second case.
+- **A CI job** runs `mvn verify` on every PR that touches `keycloak-pairing/` or the
+  compose file.
+
+**If it breaks in production anyway**, removing the JAR and restarting brings Keycloak
+back as it was. The apps treat a `404` from the endpoint as "no extension here" and fall
+back to opening Keycloak's own device page for the same code, built from A's own issuer.
+That fallback is the only use of the page. It's slower and may ask for a password, and it
+keeps pairing working while the extension is fixed.
 
 ### The Keycloak client changes
 
-On `gryt-web`, through the admin API, applied by Sivert. Not in `gryt-realm.json`: a realm
-import deletes every account, and the realm file is what took the stack down in
-GRYT-136.
+On `gryt-web` (decided), through the admin API, applied by Sivert. Not in
+`gryt-realm.json`: a realm import deletes every account, and the realm file is what took
+the stack down in GRYT-136.
 
 | Client attribute | Value | Why |
 |---|---|---|
@@ -425,32 +545,41 @@ GRYT-136.
 | `oauth2.device.code.lifespan` | `"300"` | Five minutes, matching a session, instead of the realm's default ten |
 | `oauth2.device.polling.interval` | `"5"` | The RFC's default, written down |
 
-Nothing else changes: the client stays public, with PKCE and the same redirects.
+Nothing else changes: the client stays public, with PKCE and the same redirects. A linked
+device is exactly like one that signed in normally.
 
 A script, `bootstrap/enable_device_grant.py`, does the read-modify-write the same way
 `update_keycloak_client.py` does, prints the client before and after, and is safe to run
 twice. It runs with `--no-deps` and the admin credentials passed at run time, the way the
 other one-shots do, since `admin` is normally disabled.
 
-Before trusting the attribute names, set the toggle once in the admin console on the dev
-stack, read the client back, and copy what Keycloak wrote. The names above are from
-Keycloak's source, not from a running 26.5.
+### To check on the dev stack first
 
-Whether to put the grant on `gryt-web` or on a client of its own is question 2.
+These come from reading Keycloak's source, not from a running 26.5:
+
+- The three attribute names. Set the toggle once in the admin console, read the client
+  back, and copy what Keycloak wrote.
+- That the device authorization endpoint keeps `nonce` on the stored device code. If it
+  doesn't, the binding in check 5 goes, and the rest stands.
+- That the token step doesn't ask for a consent the extension never recorded. If it does,
+  the extension records the grant for `gryt-web` as part of approving.
 
 ### What this opens up
 
-Turning on the device grant for a client lets anybody start a device flow for it. That's
-the "device code phishing" pattern: somebody gets a code for their own device, sends it to
-you with a story, and if you're signed in to Keycloak and type it at
-`auth.gryt.chat/realms/gryt/device`, their device gets your Gryt session.
+Turning on the device grant for a client lets anybody start a device flow for it, and
+Keycloak's device page at `auth.gryt.chat/realms/gryt/device` exists whether Gryt uses it
+or not. That's the "device code phishing" pattern: somebody gets a code for their own
+device, sends it to you with a story, and if you're signed in to Keycloak in your browser
+and type it there, their device gets your Gryt session.
 
 That session gets them a certificate for their key, so they can join servers as your
-account. It doesn't get them your messages. Without the seed they have no person key, and your
-contacts refuse their MLS device. And decision 5 means no new password bundle to grind.
+account. It doesn't get them your messages. Without the seed they have no person key, and
+your contacts refuse their MLS device. And decision 5 means no new password bundle to
+grind.
 
-Gryt's apps never ask anybody to go to that page and type a code. The security page
-should say so plainly.
+The extension doesn't add to this, since it only approves codes bound to a pairing. Gryt's
+apps never ask anybody to go to that page and type a code, and the security page should
+say so plainly.
 
 ## 4. Guests
 
@@ -592,6 +721,12 @@ counter in the nonce stops one being played twice. Session ids and codes are sin
 Keycloak's `device_code` is single-use and runs out after five minutes. Chunks are bound to
 their id and scope and listed by hash.
 
+**A leaked access token.** The extension turns an access token into a new session on
+another device, which a token couldn't do before. It only accepts one from `gryt-web`
+issued in the last 60 seconds, from a session that's still signed in, together with the
+binding from a live pairing. Somebody who can meet all of that already holds A's refresh
+token, which gives them the account anyway.
+
 **A hostile new device.** In a phishing attempt N is the attacker. N gets nothing until A
 approves, and what it sends A is a name, a platform string and a `user_code`. A never opens
 a URL from N, and never runs anything N sends.
@@ -622,7 +757,7 @@ The QR sits above, and a new one replaces it every five minutes without comment.
 "They don't match" and Cancel underneath.
 
 **Signing in** (accounts only).
-> Confirm in the browser on your other device.
+> Signing in as sivert@example.com…
 
 **Copying your messages.**
 > 12,400 of 48,000 messages. You can use Gryt while this finishes.
@@ -649,8 +784,9 @@ desktop, the code field, since most desktops have no camera to point at a phone.
 Approve, with the seconds left in it, and Deny. If it'd be a sixth device on a server, a
 line saying which server and "remove one first".
 
-**Confirm in your browser** (accounts only). The app opens Keycloak's device page and says
-"Tap Yes in the browser, then come back here."
+**Signing in MacBook Air** (accounts only). A spinner for the second or two the extension
+takes. Only if the extension isn't there does the app open Keycloak's device page instead,
+with "Tap Yes in the browser, then come back here."
 
 **Sending your messages.**
 > Adding MacBook Air to your conversations: 40 of 112.
@@ -690,9 +826,14 @@ Then a minor release: 0.8.0.
    ~350. After 3.
 5. **The device-grant script**, `bootstrap/enable_device_grant.py`, and a README section
    on running it. ~120. Independent of 3 and 4. Sivert applies it.
+6. **The Keycloak extension**, in `keycloak-pairing/`. The provider, its rate limits and
+   events, the Docker build, the mount in compose, the version check, the Testcontainers
+   suite and its CI job, and an alert rule. ~900, about half of it tests. Independent of
+   3, 4 and 5. Its tests turn the grant on in their own realm.
 
-Plus two things only Sivert can do: deploying the identity service, and turning on
-Cloudflare's visitor location headers for `id.gryt.chat`.
+Plus things only Sivert can do: deploying the identity service, restarting Keycloak with
+the extension, applying the client setting, and turning on Cloudflare's visitor location
+headers for `id.gryt.chat`.
 
 ### server
 
@@ -701,35 +842,36 @@ Nothing. Claiming your own KeyPackages, committing adds, `mls:devices` and the
 
 ### core (normal review)
 
-6. **The pairing client.** The relay client and both sides' state machines, with the
+7. **The pairing client.** The relay client and both sides' state machines, with the
    timeouts and cancelling from section 2. Platform-free, with the storage writes behind
    an interface each app implements. ~600. After the crypto release.
-7. **Adding your own device now.** `addOwnDevice(deviceId)` on the DM driver, and the
-   hook that reports each group's `add` position. ~300. Independent of 6.
-8. **The history transfer.** Walking the archive newest first through an interface the
+8. **Adding your own device now.** `addOwnDevice(deviceId)` on the DM driver, and the
+   hook that reports each group's `add` position. ~300. Independent of 7.
+9. **The history transfer.** Walking the archive newest first through an interface the
    apps implement, chunking, uploading and resuming, the tail, and merging on N. ~500.
-   After 6 and 7.
+   After 7 and 8.
 
 Then a core release, pinned exactly in both apps.
 
 ### client
 
-9. **The new device.** "Link from another device", the QR and code, the emoji, the device
+10. **The new device.** "Link from another device", the QR and code, the emoji, the device
    grant polling, writing the seed, keys, servers and pins, and importing history.
    ~900. **Review-required** for the parts in `common/src/auth/**`: writing the seed, and
    storing the tokens from the device grant.
-10. **The approving device.** Devices in Account & security, code entry, the approval
-    screen, opening Keycloak's device page, and the progress. ~700. **Review-required**
-    for reading the seed out of `common/src/auth/**`. Independent of 9.
-11. **No more password bundles** (decision 5). `messageKeySection.tsx` stops offering to
-    set one, and existing bundles keep opening. ~100. After 9 and 10 have shipped.
+11. **The approving device.** Devices in Account & security, code entry, the approval
+    screen, the call to the extension with the browser fallback, and the progress. ~700.
+    **Review-required** for reading the seed out of `common/src/auth/**`, and for the
+    extension call, which sits with the Keycloak code there. Independent of 10.
+12. **No more password bundles** (decision 5). `messageKeySection.tsx` stops offering to
+    set one, and existing bundles keep opening. ~100. After 10 and 11 have shipped.
 
 ### mobile (normal review)
 
-12. **The new device**, the same as 9, with the QR drawn through `react-native-svg`. ~800.
-13. **The approving device**, the same as 10, plus `expo-camera` for scanning and
-    `expo-local-authentication` for approving. ~800. Independent of 12.
-14. **No more password bundles**, if the phone writes them. ~50.
+13. **The new device**, the same as 10, with the QR drawn through `react-native-svg`. ~800.
+14. **The approving device**, the same as 11, plus `expo-camera` for scanning and
+    `expo-local-authentication` for approving. ~800. Independent of 13.
+15. **No more password bundles**, if the phone writes them. ~50.
 
 The phone's identity code isn't on the review-required list, though it holds the same
 seed as `common/src/auth/**` does on the desktop. Whether it should be is for the list in
@@ -737,52 +879,15 @@ seed as `common/src/auth/**` does on the desktop. Whether it should be is for th
 
 ### docs (normal review)
 
-15. **A guide page, "Link a device"**, and the security page: what pairing hands over, what
+16. **A guide page, "Link a device"**, and the security page: what pairing hands over, what
     the relay sees, that Gryt never asks you to type a code on Keycloak's device page, and
     that the password bundle is on its way out. ~200. Merges before the apps release.
 
 ### Order
 
 - Crypto 1 and 2, then the crypto release.
-- Auth 3, then 4, with 5 alongside. Deploy, apply the Keycloak setting, and turn on the
-  location headers before any app ships pairing.
-- Core 6 and 7, then 8, then the core release.
-- Client 9 and 10 and mobile 12 and 13, together. Docs 15 first.
-- Client 11 and mobile 14 once pairing is out.
-
-## 9. Open questions for Sivert
-
-1. **How does the approving device approve the account session?**
-   - a. Keycloak's own device page, in the browser it signs in with. No new server code.
-     One extra Yes, and a password prompt for anybody whose browser session is over a
-     month old
-   - b. A Keycloak extension in `packages/auth` that approves a code in the app. No browser,
-     but Java against Keycloak's internals, on the service every account depends on
-
-   Recommend **a** for the first version, and counting how often the password prompt shows
-   up before deciding whether **b** is worth it.
-
-2. **Which Keycloak client gets the device grant?**
-   - a. `gryt-web`, so a linked device is exactly like one that signed in normally
-   - b. A new public client, say `gryt-link`, with the grant and nothing else. It can be
-     switched off without touching sign-in, but its tokens refresh under a different
-     client id forever, and it needs the same scopes and mappers as `gryt-web`
-
-   Recommend **a**. The phishing risk is the same either way, and **b** is a second client
-   to keep in step.
-
-3. **Can the phone's own camera open a pairing QR?**
-   - a. No. Only Gryt's scanner, inside Settings, reads it
-   - b. Yes, through a `gryt://pair` link, so any camera app opens the approval screen
-
-   Recommend **a**. **b** saves two taps and makes "scan this to sign in" phishing work from
-   any QR code anywhere.
-
-4. **Where do history chunks live while they're in transit?**
-   - a. On the identity service's volume, capped at 256 MiB per pairing and 2 GiB in total,
-     and refused under 5 GiB free
-   - b. Somewhere off the auth disk, like MinIO or a separate volume on another disk
-
-   Recommend **a** with those caps, since chunks live an hour at most. The caps are there
-   because that disk also holds the Keycloak database. If the caps feel too tight for
-   somebody with years of history, **b** is where to go, not higher caps on that disk.
+- Auth 3, then 4, with 5 and 6 alongside. Deploy the relay and the extension, apply the
+  client setting, and turn on the location headers before any app ships pairing.
+- Core 7 and 8, then 9, then the core release.
+- Client 10 and 11 and mobile 13 and 14, together. Docs 16 first.
+- Client 12 and mobile 15 once pairing is out.
