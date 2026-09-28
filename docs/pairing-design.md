@@ -299,18 +299,24 @@ A size cap of 256 KiB on the envelope covers a few hundred servers' pins.
 
 On `id.gryt.chat`, under `/api/v1/pairing`. No Keycloak token on any of it, so guests use
 it the same way. Each side authenticates with the bearer token R gave it at step 1 or 3,
-so somebody who photographs the QR can't read or post as either side.
+so somebody who photographs the QR can't read or post as either side. CORS is open on the
+identity service already, so the web client calls this directly with no proxy.
+
+Session ids and codes are Crockford base32, the same alphabet as [the QR](#what-the-qr-holds)
+and [the short code](#the-short-code). Keys, commitments and sealed bodies in request and
+response JSON are unpadded base64url, spelled exactly one way — a value that doesn't
+round-trip to the same string is refused rather than normalised.
 
 | Method and path | Who | What |
 |---|---|---|
 | `POST /sessions` | N | Body `{commit}`. Returns `{id, code, token, expiresAt}` |
-| `POST /sessions/claim` | A | Body `{id}` or `{code}`, plus `{pkA}`. Returns `{id, token, commit, location, yourLocation}`. One claim per session |
+| `POST /sessions/claim` | A | Body `{id}` or `{code}`, plus `{pkA}`. Returns `{id, token, commit, location, yourLocation}`. One claim per session; a second gets `409 already_claimed`, and the code dies with the first claim either way |
 | `POST /sessions/:id/messages` | Either | Appends a message for the other side: `{type: "reveal", pkN}` once from N, otherwise `{type: "sealed", body}` |
 | `GET /sessions/:id/messages?after=n&wait=25` | Either | The other side's messages after `n`. Long-polls up to 25 seconds, under Cloudflare's 100-second limit |
 | `PUT /sessions/:id/chunks/:n` | A | One history chunk. Only after the reveal |
 | `GET /sessions/:id/chunks/:n` | N | Fetch one |
 | `DELETE /sessions/:id/chunks/:n` | N | Done with it. R also deletes a chunk after its second fetch |
-| `DELETE /sessions/:id` | Either | Cancel or finish. R deletes the session and every chunk, and the other side's next poll says `closed` |
+| `DELETE /sessions/:id` | Either | Cancel or finish. R deletes the session and every chunk, and the other side's next call gets `410 closed` |
 
 Long polling rather than a WebSocket, because it needs nothing new in Hono and goes
 through the tunnel and every proxy unchanged.
@@ -323,8 +329,18 @@ through the tunnel and every proxy unchanged.
 | Claimed, waiting for A's first sealed message | 2 minutes | Gone. The apps enforce the 60 seconds themselves, this is R's backstop |
 | After that | 1 hour from the claim, at most | Gone, chunks and all |
 
+For 10 minutes after a session expires or gets deleted, anything that touches its id gets
+`410` with `{"error": "expired"}` or `{"error": "closed"}`, so whichever side is still
+polling learns why instead of just getting "not found". After those 10 minutes the id is
+gone for good.
+
 **Sizes.** A message up to 64 KiB, the envelope up to 256 KiB, at most 64 messages a
 session. A chunk up to 2 MiB. At most 256 MiB of chunks per session.
+
+The rendezvous itself already caps two more things, regardless of chunks: at most 1,000
+live sessions, and 256 MiB of sealed messages held in memory across all of them combined.
+Without that second cap, a session nobody closes could sit on close to 4 MiB for the full
+hour, and enough abandoned sessions could hold onto most of a gigabyte between them.
 
 **Rate limits, per IP.** Ten new sessions per ten minutes. Twenty failed code lookups per
 ten minutes, then an hour's block. 1 GiB of chunk uploads a day. The IP comes from
@@ -441,40 +457,83 @@ Authorization: Bearer <A's access token>
 { "user_code": "...", "binding": "<kc, base64url>" }
 ```
 
-It answers `204` when the code is approved, and a short error code otherwise. It has no
-other endpoints and no admin UI.
+It answers `204` when the code is approved, and otherwise a status with `{"error":
+"..."}`. It has no other endpoints and no admin UI.
 
-**What it checks, in order.** Any failure stops it.
+**CORS.** The web client calls this cross-origin with an `Authorization` header, so the
+browser sends a preflight first. The extension answers `OPTIONS` and adds
+`Access-Control-Allow-Origin` on every response, success or refusal, using `gryt-web`'s own
+configured web origins the way Keycloak's other endpoints do. An origin that isn't one of
+`gryt-web`'s gets no CORS headers back, so the browser blocks the response from a page on
+a different origin.
 
-1. **The token.** Keycloak's own bearer-token check (`AppAuthManager`'s authenticator):
-   signed by the realm, not expired, and its user session still active. So a token from a
-   session that's been signed out or revoked is refused. It accepts a token whose session
-   is an offline one, which is what the apps have.
-2. **Where the token came from.** `azp` is `gryt-web`, and the token was issued in the
-   last 60 seconds. A refreshes right before calling, so an older token that leaked from a
-   log or a crash report can't be used.
-3. **The user.** Enabled, and not temporarily or permanently locked out by brute-force
-   protection.
-4. **No pending required actions.** Keycloak's device page walks somebody through a
-   pending required action first: verifying their email, a new password, terms. The
-   extension skips the browser, so it refuses anybody with one, the way Keycloak's own
-   CIBA grant does. The app says to finish it in Settings and try again.
-5. **The code.** Normalised with `OAuth2DeviceUserCodeProvider.format()`, which drops the
-   dash and upper-cases it. Then it has to exist, not be denied, still be pending, not have
-   expired, and belong to `gryt-web`.
-6. **The binding.** The device code's stored `nonce` equals `binding`, compared in constant
-   time. Only a device that took part in this pairing knows `kc`, so the extension only
-   approves codes that came out of a Gryt pairing A was in. Somebody who talks you into
-   sending them a `user_code` some other way can't get it approved through this endpoint.
+**What it checks, in order.** Any failure stops it and answers one of the statuses below.
 
-A wrong binding denies the device code on the spot, and N's next poll gets
-`access_denied`. A retry with the right binding then gets "not pending", so nobody gets a
-second try at the same code.
+1. **The body.** JSON with a `user_code` and a `binding`, or `400 bad_request`.
+2. **The code, before the token.** The code is normalised with
+   `OAuth2DeviceUserCodeProvider.format()`, which drops the dash and upper-cases it, then
+   claimed with a single-use `putIfAbsent`. This runs before the token is checked at all, on
+   purpose: it means a request with no token, or somebody else's token, still uses up and
+   denies the code. A code only ever gets this one call.
+3. **The token.** Keycloak's own bearer-token check (`AppAuthManager`'s authenticator):
+   signed by the realm, not expired, and its user session still active. No token, or a
+   token Keycloak itself refuses, gets `401 invalid_token`. It accepts a token whose
+   session is an offline one, which is what the apps have. A bad or missing token still
+   fails here, and step 2 already denied the code for it.
+4. **Was the code already used?** If step 2 found the code already claimed, that's
+   `409 code_used`, checked right after the token so the event can carry the user. A retry
+   after a refusal gets this, not a fresh look at the code.
+5. **Is this account rate-limited?** `429 rate_limited` if it's already over the failure
+   limit below.
+6. **Where the token came from.** `403 wrong_client` if `azp` isn't `gryt-web`.
+7. **How old the token is.** `403 stale_token` past 60 seconds. A refreshes right before
+   calling, so an older token that leaked from a log or a crash report can't be used.
+8. **The user.** `403 user_disabled`, or `403 user_locked` if brute-force protection has
+   temporarily or permanently locked the account.
+9. **Pending required actions.** Keycloak's device page walks somebody through a pending
+   required action first: verifying their email, a new password, terms. The extension
+   skips the browser, so it refuses anybody with one (`403 required_actions`), the way
+   Keycloak's own CIBA grant does. The app says to finish it in Settings and try again.
+10. **Is this account rate-limited on approvals?** `429 rate_limited` at 5 an hour or 20 a
+    day.
+11. **Does the code exist?** `400 unknown_code` if not. Never `404` — the apps read a `404`
+    as "the extension isn't installed" and fall back to Keycloak's device page, so the
+    endpoint itself never answers with one.
+12. **Is the code still pending?** `409 code_not_pending` if it was denied or approved
+    elsewhere.
+13. **Has it expired?** `410 expired_code`.
+14. **Is it `gryt-web`'s code?** `403 wrong_code_client` otherwise.
+15. **The binding.** The device code's stored `nonce` has to equal `binding`, compared in
+    constant time, or `403 binding_mismatch`. Only a device that took part in this pairing
+    knows `kc`, so the extension only approves codes that came out of a Gryt pairing A was
+    in. Somebody who talks you into sending them a `user_code` some other way can't get it
+    approved through this endpoint.
+
+| Status | `error` | Means |
+|---|---|---|
+| 400 | `bad_request` | The body isn't JSON with a `user_code` and a `binding` |
+| 401 | `invalid_token` | No token, or Keycloak's own token check refused it |
+| 403 | `wrong_client` | The token isn't from `gryt-web` |
+| 403 | `stale_token` | The token is over 60 seconds old |
+| 403 | `user_disabled`, `user_locked` | The account is disabled, or locked by brute-force protection |
+| 403 | `required_actions` | The account has something pending, like verifying an email |
+| 429 | `rate_limited` | 5 approvals an hour or 20 a day, or 10 refusals in an hour, for this account |
+| 400 | `unknown_code` | No such code. Already approved, or it ran out |
+| 409 | `code_used` | This code has had its one call already |
+| 409 | `code_not_pending` | The code was denied or approved elsewhere |
+| 410 | `expired_code` | The code ran out |
+| 403 | `wrong_code_client`, `binding_mismatch` | The code isn't `gryt-web`'s, or it wasn't made by this pairing |
+
+Every refusal past step 2 also denies the device code if it's still pending, so N's next
+poll gets `access_denied`. A retry then gets `409 code_used`, not another look at the same
+checks. `bad_request` and `rate_limited` are the exceptions: nothing was claimed yet, so
+there's no code to deny.
 
 **"Same account".** The extension approves the code for whichever user the token belongs
 to. It can't know who N is supposed to be, since N has no account yet. The check that N
-ends up as the right account is N's, in step 5 above: the `sub` in the envelope comes
-from A over the sealed channel, and N compares it with its new ID token.
+ends up as the right account is N's, in step 9 of [the protocol](#step-by-step): the `sub`
+in the envelope comes from A over the sealed channel, and N compares it with its new ID
+token.
 
 **No step-up on `auth_time`.** The apps stay signed in with `offline_access`, so a token's
 `auth_time` is when the person last typed their password, which can be up to 90 days ago.
@@ -483,8 +542,8 @@ extension exists to avoid. What stands in for it:
 
 - On the phone, Face ID, Touch ID or the passcode before A refreshes its token.
 - On a Mac, Touch ID where there is one.
-- The 60-second freshness in check 2.
-- The binding in check 6.
+- The 60-second freshness check.
+- The binding check.
 
 **What it does on success.** The same thing Keycloak's CIBA grant does to approve outside a
 browser (`CibaGrantType.createUserSession`), then the device grant's own approval:
@@ -524,7 +583,8 @@ Three things about the session N ends up with:
 - **Its IP address is A's**, because A is the one calling the endpoint. The admin console
   shows A's address on N's session until N's next refresh.
 
-After a good approval the code is removed, so a second call with it gets "unknown code".
+After a good approval the code is removed, so a second call with it gets
+`400 unknown_code`, same as a code that never existed.
 
 **Rate limits.** Keycloak has nothing built in for custom endpoints, so the extension keeps
 counters in Keycloak's single-use object store, which expires them on its own:
