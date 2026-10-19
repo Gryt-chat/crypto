@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * Messages sealed by the WebCrypto build still open (GRYT-733). Nothing here regenerates
  * these bytes — that is the point. If one fails, the format moved: do not update a vector.
@@ -16,9 +14,9 @@ import {
 
 const SCOPE = asIdentityScope("srv:vectors");
 const CONVERSATION = "dm_g0123456789abcdef0123456789abcdef";
-const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
+const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
 
-const SEALED = {"type": "gryt-sealed-message", "version": 1, "sender": "_qqFNvFDL1JRwZhMvr4hteNQerFcOMU5p2_11TQANmk", "iv": "5pNqiRGXKqEgVVN4", "body": "PNMUgOCjlqosAJkYmUGRXCmWFIfCv08qzyAfRaMBrOZBI2hQGBps1Tc2L9XagCl_RgWOvz7apC7Ef95B5IWJ", "keys": {"user_alice": {"iv": "fLtXGmKg-_zIbo2J", "key": "U8etq8cYnYV8jt-Cwhp07TYTIFi9mGxLU1wfiPTRCuCJ0eQ5jB-chZOoKRB9U4Dw"}, "user_bob": {"iv": "lsVxuR8NyXP9AdY_", "key": "4jaOCfWjO02ZG8LwcJeOEuE2gklLRb8BNzZYlXg3NKqLIyHY-EXeuPzk9OsZiYhc"}}};
+const SEALED: Parameters<typeof openMessage>[0]["sealed"] = {"type": "gryt-sealed-message", "version": 1, "sender": "_qqFNvFDL1JRwZhMvr4hteNQerFcOMU5p2_11TQANmk", "iv": "5pNqiRGXKqEgVVN4", "body": "PNMUgOCjlqosAJkYmUGRXCmWFIfCv08qzyAfRaMBrOZBI2hQGBps1Tc2L9XagCl_RgWOvz7apC7Ef95B5IWJ", "keys": {"user_alice": {"iv": "fLtXGmKg-_zIbo2J", "key": "U8etq8cYnYV8jt-Cwhp07TYTIFi9mGxLU1wfiPTRCuCJ0eQ5jB-chZOoKRB9U4Dw"}, "user_bob": {"iv": "lsVxuR8NyXP9AdY_", "key": "4jaOCfWjO02ZG8LwcJeOEuE2gklLRb8BNzZYlXg3NKqLIyHY-EXeuPzk9OsZiYhc"}}};
 
 const BINDING =
   "eyJhbGciOiJFUzI1NiIsInR5cCI6IkpXVCIsImp3ayI6eyJrdHkiOiJFQyIsImNydiI6IlAtMjU2IiwieCI6Il9xUkYyTzJIUGM5Yk01cXFDWVZMd3gtUkpBS0NTdnNvVDh3akdxT292SzgiLCJ5IjoiaWQyNTI4aTZTZ256RGQ5bGhJMGtMLWdBR21DT3lzbmhmR0R1bEJiWWc5TSIsImV4dCI6dHJ1ZX19.eyJpc3MiOiJncnl0OmRtLWtleSIsInNjb3BlIjoic3J2OnZlY3RvcnMiLCJkbSI6Il9xcUZOdkZETDFKUndaaE12cjRodGVOUWVyRmNPTVU1cDJfMTFUUUFObWsiLCJpYXQiOjE3NTY1MDAwMDB9.bGtdHycaMD0ZlK9H6jeeHBFs9kbS2tkk_GGL3nDq_-7zp5MCbUEPxZQnj4-ZKeP_BJhWAtThVLqeFwv7h0JFCQ";
@@ -33,7 +31,7 @@ const BINDING =
       conversationId: CONVERSATION,
       memberId: "user_alice",
       recipientKeys: alice,
-    })).text,
+    }))?.text,
     "vector plaintext, sealed by the WebCrypto build",
     "a message this device sealed before the change no longer opens",
   );
@@ -49,7 +47,7 @@ const BINDING =
       conversationId: CONVERSATION,
       memberId: "user_bob",
       recipientKeys: bob,
-    })).text,
+    }))?.text,
     "vector plaintext, sealed by the WebCrypto build",
     "a message somebody else sealed before the change no longer opens",
   );
@@ -81,7 +79,7 @@ const BINDING =
   assert.deepEqual(Object.keys(fresh).sort(), Object.keys(SEALED).sort(),
     "the envelope gained or lost a field");
 
-  const bytes = (b64) => Buffer.from(b64, "base64url").length;
+  const bytes = (b64: string) => Buffer.from(b64, "base64url").length;
 
   assert.equal(bytes(fresh.iv), 12, "AES-GCM's nonce is 12 bytes; anything else is a new format");
   assert.equal(bytes(fresh.iv), bytes(SEALED.iv));
@@ -124,7 +122,7 @@ const BINDING =
 
   const scalar = seed(5);
   const point = p256.getPublicKey(scalar, false);
-  const b64u = (b) => Buffer.from(b).toString("base64url");
+  const b64u = (b: Uint8Array) => Buffer.from(b).toString("base64url");
   const jwk = {
     kty: "EC",
     crv: "P-256",
@@ -140,6 +138,7 @@ const BINDING =
     true,
     ["sign"],
   );
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- d is dropped on purpose; pub is the public half
   const { d: _d, ...pub } = jwk;
   const alice = deriveDmKeyPair(seed(3), SCOPE);
 

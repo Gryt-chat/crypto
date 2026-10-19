@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The DM keypair, against the real curve library (GRYT-709). None of these properties fails
  * loudly: a key equal to the identity key would encrypt and decrypt perfectly well.
@@ -14,6 +12,7 @@ import { mapHashToField } from "@noble/curves/abstract/modular.js";
 import { p256 } from "@noble/curves/nist.js";
 
 import {
+  asIdentityScope,
   deriveDmKeyPair,
   dmPublicKey,
   dmSharedSecret,
@@ -21,8 +20,8 @@ import {
 import {
 } from "../dist/index.js";
 
-const utf8 = (s) => new TextEncoder().encode(s);
-const hex = (bytes) => Buffer.from(bytes).toString("hex");
+const utf8 = (s: string) => new TextEncoder().encode(s);
+const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
 
 /* Two seeds that are not each other, and not a repeated byte. */
 const SEED_A = Uint8Array.from({ length: 32 }, (_, i) => (i * 7 + 3) % 251);
@@ -32,8 +31,8 @@ const SEED_B = Uint8Array.from({ length: 32 }, (_, i) => (i * 11 + 29) % 241);
  * Scopes, not addresses (GRYT-719): `identityScopeFor` gives the lineage id, so the key
  * survives the server moving. This file is JavaScript and only checks the keying.
  */
-const HOST = "srv:one";
-const OTHER_HOST = "srv:two";
+const HOST = asIdentityScope("srv:one");
+const OTHER_HOST = asIdentityScope("srv:two");
 
 /* ── deterministic, which is what makes the recovery phrase work ────────── */
 
@@ -60,7 +59,7 @@ const OTHER_HOST = "srv:two";
  * The identity derivation, written out rather than imported. It lives in the two apps, and
  * importing one would make this a test of whichever client happened to be nearby.
  */
-function identityScalarFor(seed, scope) {
+function identityScalarFor(seed: Uint8Array, scope: string) {
   const okm = hkdf(sha256, seed, utf8("gryt-identity-v1"), utf8(scope), 48);
   return mapHashToField(okm, p256.Point.Fn.ORDER);
 }

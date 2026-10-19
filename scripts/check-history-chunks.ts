@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The history chunk format (GRYT-1484). The vector is what the phone and the desktop open
  * to check themselves. If it stops opening, the format moved: don't regenerate it.
@@ -24,7 +22,7 @@ import {
   sealHistoryChunk,
 } from "../dist/index.js";
 
-const utf8 = (s) => new TextEncoder().encode(s);
+const utf8 = (s: string) => new TextEncoder().encode(s);
 const KEY = Uint8Array.from({ length: 32 }, (_, i) => (i * 3 + 1) % 251);
 const DAY = 24 * 60 * 60 * 1000;
 const T = 1790000000000;
@@ -43,7 +41,7 @@ const SEALED = base64UrlDecode(
   "FNsmKcUE9CHSpmP_ng47p9sl8kXAzSD28_KWOFXpbav56rcNU-G5nod6f2_eBjCcw0y09EtuKaG8v61uf4H-qAnJ0tQq7Yw4iJI0VilqCrMKFjnByo5Olqfb861Orhw16AMZg-v4Rmj4FPZE1Op7GB_fHEmVqizElEiIBYaLm4OVN6YdkAxHmxedyElguXMU-AcT1v7-cMWH9RPC-GuIvtlZyA_TVoD62_1KlOwqPmQabSJFZnv4KasYnObtzUwj_mTdtpD7wOpFojoHTLuJeIAGMsVdq8u-sYO8apNW8b8",
 );
 
-const record = (scope, sentAt, n) => ({ scope, conversationId: "dm", messageId: `m${n}`, sentAt, message: { text: `t${n}` } });
+const record = (scope: string, sentAt: number, n: number) => ({ scope, conversationId: "dm", messageId: `m${n}`, sentAt, message: { text: `t${n}` } });
 
 /* ── the fixed vector opens ─────────────────────────────────────────────── */
 
@@ -55,7 +53,7 @@ const record = (scope, sentAt, n) => ({ scope, conversationId: "dm", messageId: 
 
 {
   // nonce || AES-256-GCM(HKDF(key, salt "gryt-history-chunk-v1", info id), raw DEFLATE of JSON).
-  const lp = (b) => Uint8Array.from([b.length >> 8, b.length & 0xff, ...b]);
+  const lp = (b: Uint8Array) => Uint8Array.from([b.length >> 8, b.length & 0xff, ...b]);
   const id = base64UrlDecode(ENTRY.id);
   const label = utf8("gryt-history-chunk-v1");
   const aad = Uint8Array.from([...lp(label), ...lp(id), ...lp(utf8("srv:vectors"))]);
@@ -150,7 +148,7 @@ const record = (scope, sentAt, n) => ({ scope, conversationId: "dm", messageId: 
   const key = generateHistoryKey();
   const id = new Uint8Array(16).fill(7);
   const nonce = new Uint8Array(12);
-  const lp = (b) => Uint8Array.from([b.length >> 8, b.length & 0xff, ...b]);
+  const lp = (b: Uint8Array) => Uint8Array.from([b.length >> 8, b.length & 0xff, ...b]);
   const label = utf8("gryt-history-chunk-v1");
   const bomb = deflateSync(new Uint8Array(HISTORY_CHUNK_MAX_RAW_BYTES + 100).fill(0x20));
   const aad = Uint8Array.from([...lp(label), ...lp(id), ...lp(utf8("a"))]);
@@ -162,7 +160,7 @@ const record = (scope, sentAt, n) => ({ scope, conversationId: "dm", messageId: 
 /* ── the manifest ───────────────────────────────────────────────────────── */
 
 {
-  const bad = (chunks, pattern = /isn't valid/) => assert.throws(() => parseHistoryManifest({ v: 1, chunks }), pattern);
+  const bad = (chunks: object[], pattern = /isn't valid/) => assert.throws(() => parseHistoryManifest({ v: 1, chunks }), pattern);
   assert.throws(() => parseHistoryManifest({ v: 2, chunks: [] }), /isn't valid/);
   bad([ENTRY, ENTRY], /twice/);
   bad([{ ...ENTRY, id: ENTRY.id.slice(0, -1) }]);
