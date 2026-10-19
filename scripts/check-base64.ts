@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * base64url that does not go through the host (GRYT-732). It has to encode every byte the
  * way `btoa` does, or every message already sent becomes unreadable on one platform.
@@ -10,7 +8,7 @@ import assert from "node:assert/strict";
 const { base64Url, base64UrlDecode } = await import("../dist/base64.js");
 
 /** What the modules did before this file existed. */
-const viaBtoa = (bytes) => {
+const viaBtoa = (bytes: Uint8Array) => {
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");

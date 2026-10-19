@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * Every module is reachable on its own, not only through the barrel (GRYT-732), so a file
  * name here is published surface. Against `dist`, because the `exports` map points there.
@@ -8,7 +6,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url)));
+const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 assert.deepEqual(
   pkg.exports["./*"],

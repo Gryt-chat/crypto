@@ -53,7 +53,7 @@ jobs:
 
       - run: npm run build
 
-      # Against the real dist, before anything is published: `add-esm-extensions.mjs`
+      # Against the real dist, before anything is published: `add-esm-extensions.ts`
       # rewrites every specifier, and GRYT-344 shipped a package Node could not load.
       - name: Check the crypto
         run: npm test

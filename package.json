@@ -25,10 +25,11 @@
     "dist"
   ],
   "scripts": {
-    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/add-esm-extensions.mjs",
+    "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/add-esm-extensions.ts",
     "typecheck": "tsc -p tsconfig.check.json",
-    "lint": "eslint .",
-    "test": "for f in scripts/check-*.mjs; do node \"$f\" || exit 1; done",
+    "typecheck:scripts": "tsc -p scripts",
+    "lint": "eslint --flag unstable_native_nodejs_ts_config .",
+    "test": "for f in scripts/check-*.mjs scripts/check-*.ts; do [ -e \"$f\" ] || continue; node \"$f\" || exit 1; done",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
