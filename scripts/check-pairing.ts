@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * Pairing (GRYT-1484), against docs/pairing-design.md section 2. The vectors are what the
  * phone and the desktop check themselves against. If one fails, the protocol moved.
@@ -28,17 +26,17 @@ import {
   startNewDeviceSession,
 } from "../dist/index.js";
 
-const hex = (b) => Buffer.from(b).toString("hex");
-const utf8 = (s) => new TextEncoder().encode(s);
-const text = (b) => new TextDecoder().decode(b);
-const seq = (n, m) => Uint8Array.from({ length: n }, (_, i) => (i * m + m) % 251);
+const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
+const utf8 = (s: string) => new TextEncoder().encode(s);
+const text = (b: Uint8Array) => new TextDecoder().decode(b);
+const seq = (n: number, m: number) => Uint8Array.from({ length: n }, (_, i) => (i * m + m) % 251);
 
 const SK_N = seq(32, 5);
 const SK_A = seq(32, 9);
 const SESSION = seq(16, 13);
 
 /** Both sides of one honest session, the way the relay's order produces them. */
-function pair({ skN, skA, sessionId = SESSION } = {}) {
+function pair({ skN, skA, sessionId = SESSION }: { skN?: Uint8Array; skA?: Uint8Array; sessionId?: Uint8Array } = {}) {
   const n = createPairingKey(skN);
   const a = createPairingKey(skA);
   const commitment = pairingCommitment(n.publicKey);
@@ -80,7 +78,7 @@ function pair({ skN, skA, sessionId = SESSION } = {}) {
 {
   const pkN = x25519.getPublicKey(SK_N);
   const pkA = x25519.getPublicKey(SK_A);
-  const lp = (b) => Uint8Array.from([b.length >> 8, b.length & 0xff, ...b]);
+  const lp = (b: Uint8Array) => Uint8Array.from([b.length >> 8, b.length & 0xff, ...b]);
   const commit = sha256(Uint8Array.from([...utf8("gryt-pair-v1 commit"), ...pkN]));
   const th = sha256(Uint8Array.from([
     ...lp(utf8("gryt-pair-v1")), ...lp(SESSION), ...lp(commit), ...lp(pkN), ...lp(pkA),
@@ -253,7 +251,7 @@ function pair({ skN, skA, sessionId = SESSION } = {}) {
   const live = 1000;
   const perAddressHour = 20 / (70 / 60);
   const botnetHour = 10_000 * perAddressHour;
-  const hoursPerHit = (bits) => 2 ** bits / live / botnetHour;
+  const hoursPerHit = (bits: number) => 2 ** bits / live / botnetHour;
   assert.ok(Math.abs(2 ** PAIRING_CODE_BITS / live / 1e9 - 1) < 0.1, "one hit per billion guesses");
   assert.equal(Math.round(perAddressHour), 17, "about 17 guesses an hour");
   assert.equal(Math.round(botnetHour / 10_000) * 10_000, 170_000);
@@ -276,12 +274,19 @@ function pair({ skN, skA, sessionId = SESSION } = {}) {
 
   const own = formatPairingQr({ sessionId: SESSION, publicKey: key, relayOrigin: "https://ID.Example.org:8443" });
   assert.match(own, /^[0-9A-Z $%*+\-./:]+$/);
-  assert.equal(parsePairingQr(own).relayOrigin, "https://id.example.org:8443");
+  const ownParsed = parsePairingQr(own);
+  assert.ok(ownParsed.ok);
+  assert.equal(ownParsed.relayOrigin, "https://id.example.org:8443");
   assert.throws(() => formatPairingQr({ sessionId: SESSION, publicKey: key, relayOrigin: "http://relay.example" }));
   const dev = formatPairingQr({ sessionId: SESSION, publicKey: key, relayOrigin: "http://localhost:3004" });
-  assert.equal(parsePairingQr(dev).relayOrigin, "http://localhost:3004");
+  const devParsed = parsePairingQr(dev);
+  assert.ok(devParsed.ok);
+  assert.equal(devParsed.relayOrigin, "http://localhost:3004");
 
-  const reason = (s) => parsePairingQr(s).reason;
+  const reason = (s: string) => {
+    const parsed = parsePairingQr(s);
+    return parsed.ok ? undefined : parsed.reason;
+  };
   assert.equal(reason("https://gryt.chat"), "not-pairing");
   assert.equal(reason(qr.replace("*GRYT*1*", "*GRYT*2*")), "newer-version", "an old app refuses rather than guesses");
   assert.equal(reason(qr.toLowerCase()), "not-pairing");

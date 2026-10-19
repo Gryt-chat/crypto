@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * Pinning the people you talk to, and refusing a swap (GRYT-726). Every case here is one
  * where getting it wrong looks like nothing being wrong, so they are driven, not reasoned.
@@ -11,8 +9,9 @@ import assert from "node:assert/strict";
  * Pins, in memory. The package does not decide where they live — see
  * `PeerPinStore` — so a check supplies the simplest thing that satisfies it.
  */
-let pins = {};
-const store = {
+type PinStore = Parameters<typeof pinPeerKey>[0];
+let pins: ReturnType<PinStore["read"]> = {};
+const store: PinStore = {
   read: () => pins,
   write: (next) => {
     pins = next;
@@ -39,7 +38,7 @@ const SCOPE = asIdentityScope("srv:abc123");
 const OTHER_SCOPE = asIdentityScope("srv:def456");
 const BOB = "user_bob";
 
-const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
+const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
 
 async function identity() {
   const pair = await crypto.subtle.generateKey(
@@ -64,8 +63,21 @@ const bind = ({ who = bob, dmSeed = 7, scope = SCOPE } = {}) =>
     identityPublicJwk: who.publicJwk,
   });
 
-const decide = (binding, scope = SCOPE, memberId = BOB) =>
+const decide = (binding: Parameters<typeof evaluatePeerKey>[0]["binding"], scope = SCOPE, memberId = BOB) =>
   evaluatePeerKey({ store, scope, memberId, binding });
+
+/** The verified key a decision carries, which only some kinds do. */
+const verifiedOf = (decision: Awaited<ReturnType<typeof decide>>) => {
+  assert.ok("verified" in decision, `a ${decision.kind} decision carries no verified key`);
+  return decision.verified;
+};
+
+/** The pin for `memberId` here, which the case expects to exist. */
+const pinOf = (scope = SCOPE, memberId = BOB) => {
+  const pin = getPeerPin(store, scope, memberId);
+  assert.ok(pin, `nothing is pinned for ${memberId} on ${scope}`);
+  return pin;
+};
 
 /* ── nothing published is not an error ──────────────────────────────────── */
 
@@ -90,7 +102,7 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
   assert.equal(again.kind, "first",
     "evaluating must not pin; the caller decides when to");
 
-  pinPeerKey(store, SCOPE, BOB, first.verified);
+  pinPeerKey(store, SCOPE, BOB, verifiedOf(first));
   assert.equal((await decide(binding)).kind, "known",
     "after pinning, the same binding is the person we know");
 }
@@ -140,8 +152,9 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
       "refusing has to be sticky; a client that gives in on the second try gives in");
   }
 
-  const pin = getPeerPin(store, SCOPE, BOB);
-  assert.equal(pin.thumbprint, (await decide(await bind())).pin?.thumbprint ?? pin.thumbprint,
+  const pin = pinOf();
+  const again = await decide(await bind());
+  assert.equal(pin.thumbprint, ("pin" in again ? again.pin?.thumbprint : undefined) ?? pin.thumbprint,
     "the stored pin must not be quietly overwritten by the key that was refused");
 }
 
@@ -149,14 +162,14 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
 
 {
   const swapped = await bind({ who: mallory });
-  const before = getPeerPin(store, SCOPE, BOB);
+  const before = pinOf();
 
   forgetPeerPin(store, SCOPE, BOB);
   const fresh = await decide(swapped);
   assert.equal(fresh.kind, "first", "forgetting a pin is what makes the next key pinnable");
 
-  pinPeerKey(store, SCOPE, BOB, fresh.verified);
-  const after = getPeerPin(store, SCOPE, BOB);
+  pinPeerKey(store, SCOPE, BOB, verifiedOf(fresh));
+  const after = pinOf();
   assert.notEqual(after.thumbprint, before.thumbprint);
   assert.equal((await decide(swapped)).kind, "known");
 }
@@ -185,13 +198,13 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
 {
   const binding = await bind();
   const here = await decide(binding);
-  pinPeerKey(store, SCOPE, BOB, here.verified);
+  pinPeerKey(store, SCOPE, BOB, verifiedOf(here));
 
   const there = await bind({ scope: OTHER_SCOPE });
   const overThere = await decide(there, OTHER_SCOPE);
   assert.equal(overThere.kind, "first",
     "the same member id on another server is somebody this pin says nothing about");
-  pinPeerKey(store, OTHER_SCOPE, BOB, overThere.verified);
+  pinPeerKey(store, OTHER_SCOPE, BOB, verifiedOf(overThere));
 
   assert.equal((await decide(binding)).kind, "known",
     "and pinning them there must not have disturbed the pin here");
@@ -204,7 +217,7 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
   // take the second with it. The separator in the storage key is what stops that.
   const shorter = asIdentityScope("srv:abc");
   const decision = await decide(await bind({ scope: shorter }), shorter);
-  pinPeerKey(store, shorter, BOB, decision.verified);
+  pinPeerKey(store, shorter, BOB, verifiedOf(decision));
 
   forgetPeerPinsForScope(store, shorter);
   assert.equal(getPeerPin(store, shorter, BOB), null);
@@ -215,13 +228,13 @@ const decide = (binding, scope = SCOPE, memberId = BOB) =>
 /* ── firstSeenAt survives a re-pin ──────────────────────────────────────── */
 
 {
-  const original = getPeerPin(store, SCOPE, BOB).firstSeenAt;
+  const original = pinOf().firstSeenAt;
   const decision = await decide(await bind());
-  pinPeerKey(store, SCOPE, BOB, decision.verified, original + 100_000);
+  pinPeerKey(store, SCOPE, BOB, verifiedOf(decision), original + 100_000);
 
-  assert.equal(getPeerPin(store, SCOPE, BOB).firstSeenAt, original,
+  assert.equal(pinOf().firstSeenAt, original,
     "known since has to mean since this person was first seen, not since they last changed device");
-  assert.equal(getPeerPin(store, SCOPE, BOB).lastSeenAt, original + 100_000);
+  assert.equal(pinOf().lastSeenAt, original + 100_000);
 }
 
 /* ── leaving a server forgets the people on it ──────────────────────────── */

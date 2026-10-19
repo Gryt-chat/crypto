@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The person key, its binding, device certificates and the AuthenticationService. A leaf that
  * gets past these is a device in somebody's DMs that they never added.
@@ -39,13 +37,17 @@ import {
   joinGroup,
   processMessage,
   acceptAll,
+  type ClientConfig,
+  type Credential,
+  type KeyPackage,
+  type MLSMessage,
+  type Proposal,
 } from "ts-mls";
 
 const SCOPE = asIdentityScope("srv:vectors");
 const OTHER = asIdentityScope("srv:other");
-const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
-const hex = (b) => Buffer.from(b).toString("hex");
-const unhex = (s) => new Uint8Array(Buffer.from(s, "hex"));
+const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
+const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
 
 /* ── the person key: pinned bytes, and node:crypto agrees with them ─────── */
 
@@ -98,11 +100,11 @@ async function identity() {
   await assert.rejects(verifyPersonKeyBinding(dmBinding, SCOPE), /issued by/, "a DM key binding passed as a person key binding");
 
   const [h, p, s] = binding.split(".");
-  const payload = JSON.parse(Buffer.from(p, "base64url"));
+  const payload = JSON.parse(Buffer.from(p, "base64url").toString());
   const swapped = Buffer.from(JSON.stringify({ ...payload, person: base64Url(new Uint8Array(32).fill(9)) })).toString("base64url");
   await assert.rejects(verifyPersonKeyBinding(`${h}.${swapped}.${s}`, SCOPE), /does not check out/, "a swapped person key verified");
 
-  const header = JSON.parse(Buffer.from(h, "base64url"));
+  const header = JSON.parse(Buffer.from(h, "base64url").toString());
   const none = Buffer.from(JSON.stringify({ ...header, alg: "none" })).toString("base64url");
   await assert.rejects(verifyPersonKeyBinding(`${none}.${p}.${s}`, SCOPE), /ES256/);
 
@@ -121,7 +123,7 @@ async function identity() {
     personPublicKey: person.publicKey,
     scope: SCOPE,
     identityPrivateKey: async (bytes) =>
-      new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, alice.privateKey, bytes)),
+      new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, alice.privateKey, bytes as BufferSource)),
     identityPublicJwk: alice.publicJwk,
   });
   assert.equal((await verifyPersonKeyBinding(viaFunction, SCOPE)).identityThumbprint, verified.identityThumbprint);
@@ -187,7 +189,7 @@ const certificate = (over = {}) =>
 {
   const leaf = generateDeviceSignatureKeyPair();
   const bytes = certificate({ leafSignatureKey: leaf.publicKey });
-  const credential = { credentialType: "basic", identity: bytes };
+  const credential: Credential = { credentialType: "basic", identity: bytes };
   let asked = 0;
   const trusting = createMlsAuthenticationService({ scope: SCOPE, trustPersonKey: () => (asked++, true) });
 
@@ -205,12 +207,16 @@ const certificate = (over = {}) =>
   assert.equal(await refusing.validateCredential(credential, leaf.publicKey), false);
   const throwing = createMlsAuthenticationService({ scope: SCOPE, trustPersonKey: () => { throw new Error("no pin store"); } });
   assert.equal(await throwing.validateCredential(credential, leaf.publicKey), false, "a trust callback that threw let the leaf in");
+  // @ts-expect-error -- a callback that answers with something other than a boolean
   const truthy = createMlsAuthenticationService({ scope: SCOPE, trustPersonKey: () => "yes" });
   assert.equal(await truthy.validateCredential(credential, leaf.publicKey), false, "a truthy non-boolean counted as trust");
 
   const copy = deviceCertificateOf(credential, SCOPE);
+  assert.ok(copy, "a valid certificate read as none");
   copy.personPublicKey.fill(0);
-  assert.equal(hex(deviceCertificateOf(credential, SCOPE).personPublicKey), hex(KARI.publicKey), "writing to a returned certificate changed the cache");
+  const again = deviceCertificateOf(credential, SCOPE);
+  assert.ok(again, "a valid certificate read as none the second time");
+  assert.equal(hex(again.personPublicKey), hex(KARI.publicKey), "writing to a returned certificate changed the cache");
 }
 
 /* ── and ts-mls calls it: an untrusted person is refused on add and on join ── */
@@ -218,7 +224,7 @@ const certificate = (over = {}) =>
 {
   const cs = await getCiphersuiteImpl(getCiphersuiteFromName(MLS_CIPHERSUITE), grytMlsCryptoProvider);
   const people = { kari: derivePersonKeyPair(seed(11), SCOPE), ola: derivePersonKeyPair(seed(13), SCOPE), eve: derivePersonKeyPair(seed(17), SCOPE) };
-  const device = async (who, name) => {
+  const device = async (who: keyof typeof people, name: string) => {
     const leaf = generateDeviceSignatureKeyPair();
     const identityBytes = signDeviceCertificate({
       personPrivateKey: people[who].privateKey,
@@ -230,7 +236,7 @@ const certificate = (over = {}) =>
     return generateKeyPackageWithKey({ credentialType: "basic", identity: identityBytes }, defaultCapabilities(), defaultLifetime, [], leaf, cs);
   };
   const trusted = new Set([hex(people.kari.publicKey), hex(people.ola.publicKey)]);
-  const clientConfig = (trust) => ({
+  const clientConfig = (trust: Set<string>): ClientConfig => ({
     keyRetentionConfig: { retainKeysForGenerations: 10, retainKeysForEpochs: 4, maximumForwardRatchetSteps: 200 },
     lifetimeConfig: { maximumTotalLifetime: 2628000n, validateLifetimeOnReceive: false },
     keyPackageEqualityConfig: {
@@ -240,8 +246,8 @@ const certificate = (over = {}) =>
     paddingConfig: { kind: "padUntilLength", padUntilLength: 256 },
     authService: createMlsAuthenticationService({ scope: SCOPE, trustPersonKey: (c) => trust.has(hex(c.personPublicKey)) }),
   });
-  const add = (kp) => ({ proposalType: "add", add: { keyPackage: kp.publicPackage } });
-  const unwire = (m) => decodeMlsMessage(encodeMlsMessage(m), 0)[0];
+  const add = (kp: { publicPackage: KeyPackage }): Proposal => ({ proposalType: "add", add: { keyPackage: kp.publicPackage } });
+  const unwire = (m: MLSMessage) => decodeMlsMessage(encodeMlsMessage(m), 0)?.[0];
 
   const [kariLaptop, olaPhone, evePhone] = await Promise.all([device("kari", "laptop"), device("ola", "phone"), device("eve", "phone")]);
   let kari = await createGroup(new TextEncoder().encode("dm"), kariLaptop.publicPackage, kariLaptop.privatePackage, [], cs, clientConfig(trusted));
@@ -254,7 +260,10 @@ const certificate = (over = {}) =>
 
   const added = await createCommit({ state: kari, cipherSuite: cs }, { extraProposals: [add(olaPhone)], ratchetTreeExtension: true });
   kari = added.newState;
-  const welcome = unwire({ version: "mls10", wireformat: "mls_welcome", welcome: added.welcome }).welcome;
+  assert.ok(added.welcome, "adding Ola made no Welcome");
+  const sent = unwire({ version: "mls10", wireformat: "mls_welcome", welcome: added.welcome });
+  assert.ok(sent?.wireformat === "mls_welcome", "the Welcome didn't decode as one");
+  const welcome = sent.welcome;
   const ola = await joinGroup(welcome, olaPhone.publicPackage, olaPhone.privatePackage, emptyPskIndex, cs, undefined, undefined, clientConfig(trusted));
   assert.ok(ola, "Ola couldn't join a group of people he trusts");
 
@@ -270,6 +279,7 @@ const certificate = (over = {}) =>
   const lenient = { ...kari, clientConfig: clientConfig(new Set([...trusted, hex(people.eve.publicKey)])) };
   const sneaky = await createCommit({ state: lenient, cipherSuite: cs }, { extraProposals: [add(evePhone)], ratchetTreeExtension: true });
   const wire = unwire(sneaky.commit);
+  assert.ok(wire?.wireformat === "mls_public_message" || wire?.wireformat === "mls_private_message", "the commit didn't decode as a message");
   await assert.rejects(processMessage(wire, ola, emptyPskIndex, acceptAll, cs), /Could not validate credential/, "Ola accepted a commit adding somebody he doesn't trust");
 }
 

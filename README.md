@@ -100,7 +100,7 @@ function, because that's where the platforms hold a key differently. And the
 vault's Argon2id, which takes a `VaultKdfs` from the app: pure-JS Argon2id takes
 26 seconds on an interpreter, so the web uses WASM and a phone uses native code.
 The pure-JS one here is the reference, and the answers every implementation has
-to give are in `check-identity-vault.mjs`.
+to give are in `check-identity-vault.ts`.
 
 **Hiding that a file exists.** An attachment is encrypted and its name, type and
 dimensions go inside the message, but the server still sees that a file was
@@ -124,7 +124,7 @@ stored and how it reaches a second device.
 what a client installs. `check-crypto-vectors.ts` holds bytes produced before
 the WebCrypto-to-noble conversion and nothing regenerates them — a change that
 quietly altered the envelope would leave every message already sent unreadable.
-`check-identity-vault.mjs` does the same for the sealed seed: three bundles
+`check-identity-vault.ts` does the same for the sealed seed: three bundles
 sealed by the client before Argon2id, and one from the version that added it.
 `check-mls-provider.ts` runs the MLS crypto against the RFC 9180, 8032 and 4231
 known answers with `crypto.subtle` taken away, the way Hermes has it.
