@@ -33,8 +33,10 @@ jobs:
             exit 1
           fi
       - run: npm run build
+      # The scripts import `dist`, so their types are checked once it exists.
+      - run: npm run typecheck:scripts
 
-      # Against `dist`, not `src`: `add-esm-extensions.mjs` rewrites every specifier on the
+      # Against `dist`, not `src`: `add-esm-extensions.ts` rewrites every specifier on the
       # way out, and GRYT-344 shipped a package tsc liked and Node could not load.
       - name: Check the crypto
         run: npm test

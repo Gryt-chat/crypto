@@ -84,7 +84,7 @@ ambiguous, and TypeScript drops the name rather than saying so, so it takes the
 other modules by subpath and leaves `peer-keys` to its own file.
 
 That makes the file names here part of the published surface.
-`scripts/check-subpaths.mjs` is what stops a rename getting out.
+`scripts/check-subpaths.ts` is what stops a rename getting out.
 
 ## What it deliberately isn't
 

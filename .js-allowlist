@@ -14,13 +14,11 @@ docs/mls-library-check/vectors-hermes-entry.mjs
 docs/mls-library-check/vectors.mjs
 docs/mls-library-check/web-entry.mjs
 docs/mls-library-check/web-run.mjs
+# Runs the rig's vectors-core.mjs, which has no types, so it stays beside it.
+scripts/check-mls-vectors.mjs
 
 # Still to move to TypeScript (GRYT-1800).
-eslint.config.mjs
-scripts/add-esm-extensions.mjs
 scripts/check-attachments.mjs
-scripts/check-base64.mjs
-scripts/check-comment-length.mjs
 scripts/check-comparison-code.mjs
 scripts/check-conversation-encryption.mjs
 scripts/check-crypto-vectors.mjs
@@ -34,10 +32,7 @@ scripts/check-mls-credentials.mjs
 scripts/check-mls-group.mjs
 scripts/check-mls-properties.mjs
 scripts/check-mls-provider.mjs
-scripts/check-mls-vectors.mjs
 scripts/check-pairing-envelope.mjs
 scripts/check-pairing.mjs
 scripts/check-peer-keys.mjs
 scripts/check-person-key-pins.mjs
-scripts/check-seed-words.mjs
-scripts/check-subpaths.mjs
