@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The pairing envelope and the identity backup it carries (GRYT-1484). N writes what this
  * returns, so everything it lets through ends up in somebody's key store.
@@ -8,16 +6,18 @@
 import assert from "node:assert/strict";
 
 import {
+  asIdentityScope,
   base64Url,
   decodePairingEnvelope,
   encodePairingEnvelope,
   PAIRING_ENVELOPE_MAX_BYTES,
+  type PairingEnvelope,
   parseIdentityBackup,
 } from "../dist/index.js";
 
-const hex = (b) => Buffer.from(b).toString("hex");
-const utf8 = (s) => new TextEncoder().encode(s);
-const seq = (n, m) => Uint8Array.from({ length: n }, (_, i) => (i * m + m) % 251);
+const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
+const utf8 = (s: string) => new TextEncoder().encode(s);
+const seq = (n: number, m: number) => Uint8Array.from({ length: n }, (_, i) => (i * m + m) % 251);
 
 const JWK = { kty: "EC", crv: "P-256", x: "eHg", y: "eXk" };
 const PIN = {
@@ -41,8 +41,8 @@ const FULL = {
     username: "sivert",
   },
   servers: [
-    { host: "chat.example", name: "Example", scope: "srv:abc", nickname: "S", scheme: "https" },
-    { host: "other.example", name: "", scope: "other.example" },
+    { host: "chat.example", name: "Example", scope: asIdentityScope("srv:abc"), nickname: "S", scheme: "https" },
+    { host: "other.example", name: "", scope: asIdentityScope("other.example") },
   ],
   pins: { "srv:abc": { user_1: PIN, user_2: { thumbprint: "t2", dmPublicKey: PIN.dmPublicKey, firstSeenAt: 5, lastSeenAt: 6 } } },
   history: {
@@ -50,12 +50,12 @@ const FULL = {
     manifest: { v: 1, chunks: [{ id: base64Url(seq(16, 5)), scope: "srv:abc", first: 1, last: 2, count: 2, bytes: 100, sha256: base64Url(seq(32, 5)) }] },
   },
   from: "Sivert's iPhone",
-};
+} satisfies PairingEnvelope;
 
-const GUEST = { seed: seq(32, 11), keys: [], servers: [], pins: {}, from: "" };
+const GUEST: PairingEnvelope = { seed: seq(32, 11), keys: [], servers: [], pins: {}, from: "" };
 
-const roundTrip = (e) => decodePairingEnvelope(encodePairingEnvelope(e));
-const raw = (overrides) => {
+const roundTrip = (e: PairingEnvelope) => decodePairingEnvelope(encodePairingEnvelope(e));
+const raw = (overrides: object) => {
   const base = JSON.parse(new TextDecoder().decode(encodePairingEnvelope(FULL)));
   return utf8(JSON.stringify({ ...base, ...overrides }));
 };
@@ -65,6 +65,7 @@ const raw = (overrides) => {
 {
   const back = roundTrip(FULL);
   assert.equal(hex(back.seed), hex(FULL.seed));
+  assert.ok(back.history, "the history key was dropped");
   assert.equal(hex(back.history.key), hex(FULL.history.key));
   assert.deepEqual({ ...back, seed: 0, history: 0 }, { ...FULL, seed: 0, history: 0 });
   assert.deepEqual(back.history.manifest, FULL.history.manifest);
@@ -84,9 +85,11 @@ const raw = (overrides) => {
 
 {
   const back = decodePairingEnvelope(raw({ tokens: "keycloak", servers: [{ ...FULL.servers[0], token: "x" }] }));
-  assert.equal(back.tokens, undefined, "an unknown field never reaches storage");
-  assert.equal(back.servers[0].token, undefined);
+  // Fields the envelope has no type for, which is the point: they must not come back.
+  assert.equal((back as { tokens?: string }).tokens, undefined, "an unknown field never reaches storage");
+  assert.equal((back.servers[0] as { token?: string }).token, undefined);
 
+  // @ts-expect-error -- extras a caller might hand over, which must not be encoded
   const withExtra = encodePairingEnvelope({ ...FULL, mlsState: "never", servers: [{ ...FULL.servers[0], token: "t" }] });
   assert.ok(!new TextDecoder().decode(withExtra).includes("never"), "MLS state never leaves the device");
   assert.ok(!new TextDecoder().decode(withExtra).includes('"token"'), "nor does a server's access token");
@@ -95,7 +98,7 @@ const raw = (overrides) => {
 /* ── refusals ───────────────────────────────────────────────────────────── */
 
 {
-  const refused = (overrides, pattern = /isn't valid/) =>
+  const refused = (overrides: object, pattern = /isn't valid/) =>
     assert.throws(() => decodePairingEnvelope(raw(overrides)), pattern, JSON.stringify(overrides).slice(0, 80));
 
   refused({ v: 2 }, /newer version/);

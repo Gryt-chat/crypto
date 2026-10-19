@@ -121,7 +121,7 @@ stored and how it reaches a second device.
 ## Checks
 
 `npm test` runs every `scripts/check-*.mjs` against the built `dist`, which is
-what a client installs. `check-crypto-vectors.mjs` holds bytes produced before
+what a client installs. `check-crypto-vectors.ts` holds bytes produced before
 the WebCrypto-to-noble conversion and nothing regenerates them — a change that
 quietly altered the envelope would leave every message already sent unreadable.
 `check-identity-vault.mjs` does the same for the sealed seed: three bundles
@@ -130,7 +130,7 @@ sealed by the client before Argon2id, and one from the version that added it.
 known answers with `crypto.subtle` taken away, the way Hermes has it.
 `check-mls-vectors.mjs` runs the 395 suite 1 vectors from RFC 9420's interop
 set on that provider. It fetches them from `mlswg/mls-implementations` at a
-fixed commit the first time, into `.mls-vectors/`. `check-mls-properties.mjs`
+fixed commit the first time, into `.mls-vectors/`. `check-mls-properties.ts`
 checks six things the vectors can't: a removed member can't read on, a new
 member can't read back, replays fail, and late or out-of-order messages still
 open. ts-mls 1.6.2 passes every vector and fails the first property, which is

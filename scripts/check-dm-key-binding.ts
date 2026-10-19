@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * Saying a DM key is yours, and refusing one that is not (GRYT-720). A binding that verified
  * when it should not is a key the server chose, with a checkmark next to it.
@@ -19,7 +17,7 @@ import {
 const SCOPE = asIdentityScope("srv:abc123");
 const OTHER_SCOPE = asIdentityScope("srv:def456");
 
-const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
+const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
 
 async function identity() {
   const pair = await crypto.subtle.generateKey(
@@ -46,10 +44,10 @@ const sign = async (over = {}) =>
     ...over,
   });
 
-const hex = (b) => Buffer.from(b).toString("hex");
-const parts = (jwt) => jwt.split(".");
-const decode = (p) => JSON.parse(Buffer.from(p, "base64url").toString());
-const encode = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
+const parts = (jwt: string) => jwt.split(".");
+const decode = (p: string) => JSON.parse(Buffer.from(p, "base64url").toString());
+const encode = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
 
 /* ── a binding you signed yourself comes back with the key you put in ────── */
 
@@ -157,7 +155,7 @@ const encode = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
 
 {
   for (const bad of ["", "one.two", "a.b.c.d", "not a jwt"]) {
-    await assert.rejects(verifyDmKeyBinding(bad, SCOPE), undefined,
+    await assert.rejects(verifyDmKeyBinding(bad, SCOPE),
       `"${bad}" was accepted as a binding`);
   }
 

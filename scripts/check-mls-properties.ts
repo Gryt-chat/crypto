@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * Six things Gryt relies on that the RFC vectors can't see, through the group engine and saved
  * state. The first is GHSA-gwp3-968w-m7gv: ts-mls below 1.6.4 fails it and passes every vector.
@@ -18,6 +16,7 @@ import {
   encryptMlsMessage,
   generateMlsKeyPackage,
   joinMlsGroup,
+  type MlsGroupState,
   processMlsMessage,
   removeMlsMembers,
   updateMlsLeaf,
@@ -25,28 +24,33 @@ import {
 
 const SCOPE = asIdentityScope("srv:properties");
 const trust = { scope: SCOPE, trustPersonKey: () => true };
-const text = (s) => new TextEncoder().encode(s);
-const words = (b) => new TextDecoder().decode(b);
-const reload = (state) => decodeMlsGroupState(encodeMlsGroupState(state), trust);
+const text = (s: string) => new TextEncoder().encode(s);
+const words = (b: Uint8Array) => new TextDecoder().decode(b);
+const reload = (state: MlsGroupState) => decodeMlsGroupState(encodeMlsGroupState(state), trust);
 
 let n = 0;
-const device = (name) => {
+const device = (name: string) => {
   n++;
   return createMlsDevice({ seed: Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251), scope: SCOPE, deviceName: name });
 };
 
 /** Alice starts a group and adds everybody else in one commit. */
-async function group(...others) {
+async function group(...others: string[]) {
   const alice = device("alice");
   const packages = await Promise.all(others.map(async (name) => ({ name, device: device(name) })));
-  for (const p of packages) p.kp = await generateMlsKeyPackage(p.device);
-  const added = await addMlsMembers(await createMlsGroup(alice, trust), packages.map((p) => p.kp.keyPackage));
-  const states = { alice: reload(added.state) };
-  for (const p of packages) states[p.name] = reload(await joinMlsGroup(added.welcome, p.kp.keyPackage, p.kp.privatePackage, trust));
+  const keyPackages = [];
+  for (const p of packages) keyPackages.push(await generateMlsKeyPackage(p.device));
+  const added = await addMlsMembers(await createMlsGroup(alice, trust), keyPackages.map((kp) => kp.keyPackage));
+  const { welcome } = added;
+  assert.ok(welcome, "adding members made no Welcome");
+  const states: Record<string, MlsGroupState> = { alice: reload(added.state) };
+  for (const [i, p] of packages.entries()) {
+    states[p.name] = reload(await joinMlsGroup(welcome, keyPackages[i].keyPackage, keyPackages[i].privatePackage, trust));
+  }
   return { states, devices: Object.fromEntries(packages.map((p) => [p.name, p.device])) };
 }
 
-async function opens(state, bytes) {
+async function opens(state: MlsGroupState, bytes: Uint8Array) {
   try {
     return words((await decryptMlsMessage(state, bytes)).plaintext);
   } catch {
@@ -61,7 +65,7 @@ const properties = {
     const removed = await removeMlsMembers(s.alice, [devices.bob.deviceId], SCOPE);
     const bob = await processMlsMessage(s.bob, removed.commit);
     const carol = await processMlsMessage(s.carol, removed.commit);
-    assert.equal(bob.removed, true);
+    assert.equal(bob.kind === "handshake" && bob.removed, true);
     const m = await encryptMlsMessage(reload(removed.state), text("bob must not read this"));
     assert.equal(await opens(reload(carol.state), m.message), "bob must not read this", "the control failed: carol can't read it either");
     return (await opens(reload(bob.state), m.message)) === undefined;
@@ -74,6 +78,7 @@ const properties = {
     const carol = device("carol");
     const kp = await generateMlsKeyPackage(carol);
     const added = await addMlsMembers(before.state, [kp.keyPackage]);
+    assert.ok(added.welcome, "adding carol made no Welcome");
     const joined = reload(await joinMlsGroup(added.welcome, kp.keyPackage, kp.privatePackage, trust));
     return (await opens(joined, before.message)) === undefined;
   },
@@ -119,7 +124,7 @@ for (const [name, check] of Object.entries(properties)) {
   try {
     ok = await check();
   } catch (e) {
-    console.error(`  ${name} threw: ${e.message}`);
+    console.error(`  ${name} threw: ${e instanceof Error ? e.message : String(e)}`);
   }
   if (!ok) {
     failed++;
