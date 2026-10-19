@@ -41,7 +41,7 @@ export interface Argon2idParams {
 
 /**
  * The slow KDFs, supplied by the platform: WASM on the web, native on a phone. Both return
- * 32 bytes, and `check-identity-vault.mjs` holds the answers they must agree on.
+ * 32 bytes, and `check-identity-vault.ts` holds the answers they must agree on.
  */
 export interface VaultKdfs {
   argon2id(password: Uint8Array, salt: Uint8Array, params: Argon2idParams): Promise<Uint8Array>;

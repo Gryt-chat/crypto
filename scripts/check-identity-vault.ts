@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The sealed seed on the account (GRYT-1473). Every bundle already on Keycloak has to keep
  * opening, so the vectors here are literals: if one fails the format moved, not the vector.
@@ -18,6 +16,7 @@ import {
   openSeed,
   parseRecoveryKey,
   referenceVaultKdfs,
+  type SealedVault,
   sealSeed,
   VAULT_ARGON2ID,
   VAULT_PASSWORD_WORDS,
@@ -27,9 +26,9 @@ import {
 } from "../dist/index.js";
 import { wordlist } from "@scure/bip39/wordlists/english.js";
 
-const hex = (bytes) => Buffer.from(bytes).toString("hex");
-const utf8 = (text) => new TextEncoder().encode(text);
-const text = (bytes) => new TextDecoder().decode(bytes);
+const hex = (bytes: Uint8Array) => Buffer.from(bytes).toString("hex");
+const utf8 = (text: string) => new TextEncoder().encode(text);
+const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
 const WORDS =
   "abandon amount liar amount expire adjust cage candy arch gather drum bullet " +
@@ -61,7 +60,7 @@ assert.deepEqual({ ...VAULT_ARGON2ID }, { m: 65536, t: 3, p: 1 }, "the vault's c
 /* ── version 1 bundles, sealed by the client on main before this change ──── */
 
 // Each from client identity-vault.ts at b215c594, PBKDF2 at 600,000 through WebCrypto.
-const V1 = [
+const V1: { secret: string; words: string; vault: SealedVault }[] = [
   {
     secret: "hunter2x",
     words: WORDS,
@@ -110,7 +109,7 @@ for (const { secret, words, vault } of V1) {
 /* ── a version 2 bundle, frozen when this format shipped ────────────────── */
 
 const RECOVERY = Uint8Array.from({ length: 32 }, (_, i) => i * 7 + 1);
-const V2 = {"type":"gryt-identity-vault","version":2,"secretKind":"password","salt":"","iv":"nqcvsvYf8MrRqcKe","data":"koQ68z2tN96rbIckVaDaYznXFZrWZ2_EHncb9sPqFCK-RSo9XHnKZjvKO0OTMQKgEqM8MATlAICv2WyZixcPk0h7mzdfHSkPk_tZitn4OGIWwR4IdyZrGKI-8WmytUXSxqCswnvmuL2Akafxdqlo-ALaouM7p7NdXXunmYpLxw7zgV2oRUJ9js9dotA1MJjkH-Dg74-xWjAf1VDLC51NeX7uZQee","slots":[{"kind":"password","kdf":"argon2id","m":65536,"t":3,"p":1,"salt":"zrinFrrnINf3_98bbE3L2Q","iv":"rHX5v0kTPDiYiz3s","key":"FSAg_cXJPP-hP3UoZ-YFoeAS7MrYLSrGuvqmHAjxUdzuw1OECHoofjTPnZdeFlCk"},{"kind":"recovery","kdf":"hkdf-sha256","salt":"e4GrFtB6ph7lgB9adk-iEg","iv":"Vo9hwBqLal_T7ZAe","key":"6nG42JskyoM0NZs0BtWctkHmJJPKNVqT2Jh9AC5uQVpKDVnHerVTJQfFxzAFtVdk"}]};
+const V2: SealedVault = {"type":"gryt-identity-vault","version":2,"secretKind":"password","salt":"","iv":"nqcvsvYf8MrRqcKe","data":"koQ68z2tN96rbIckVaDaYznXFZrWZ2_EHncb9sPqFCK-RSo9XHnKZjvKO0OTMQKgEqM8MATlAICv2WyZixcPk0h7mzdfHSkPk_tZitn4OGIWwR4IdyZrGKI-8WmytUXSxqCswnvmuL2Akafxdqlo-ALaouM7p7NdXXunmYpLxw7zgV2oRUJ9js9dotA1MJjkH-Dg74-xWjAf1VDLC51NeX7uZQee","slots":[{"kind":"password","kdf":"argon2id","m":65536,"t":3,"p":1,"salt":"zrinFrrnINf3_98bbE3L2Q","iv":"rHX5v0kTPDiYiz3s","key":"FSAg_cXJPP-hP3UoZ-YFoeAS7MrYLSrGuvqmHAjxUdzuw1OECHoofjTPnZdeFlCk"},{"kind":"recovery","kdf":"hkdf-sha256","salt":"e4GrFtB6ph7lgB9adk-iEg","iv":"Vo9hwBqLal_T7ZAe","key":"6nG42JskyoM0NZs0BtWctkHmJJPKNVqT2Jh9AC5uQVpKDVnHerVTJQfFxzAFtVdk"}]};
 
 assert.equal(formatRecoveryKey(RECOVERY), "0440-Y5GX-4GNK-4EA0-8X75-AQ33-D9RQ-GZW6-HPA9-Q8N9-P2VV-XHEC-TFD0");
 assert.equal(text(await openSeed(V2, "legal winner thank year wave sausage")), WORDS, "password slot");
@@ -124,7 +123,7 @@ assert.ok(!vaultNeedsUpgrade(V2));
 {
   // The client's isSealedVault at b215c594. Failing it, an old client says the account
   // has no password and offers to set one over the new bundle.
-  const oldIsSealedVault = (v) => !!v && v.type === VAULT_TYPE && typeof v.salt === "string" && typeof v.data === "string";
+  const oldIsSealedVault = (v: { type?: string; salt?: string; data?: string } | null) => !!v && v.type === VAULT_TYPE && typeof v.salt === "string" && typeof v.data === "string";
   assert.ok(oldIsSealedVault(V2), "an old client would treat a version 2 bundle as absent");
 }
 
@@ -159,8 +158,8 @@ const SEED = utf8(WORDS);
   const hay = JSON.stringify(sealed);
   assert.ok(!hay.includes(WORDS.split(" ")[0] + " "), "the words must not be in the blob");
 
-  const b64 = (s) => s.replace(/-/g, "+").replace(/_/g, "/");
-  const flip = (s) => {
+  const b64 = (s: string) => s.replace(/-/g, "+").replace(/_/g, "/");
+  const flip = (s: string) => {
     const bytes = Buffer.from(b64(s), "base64");
     bytes[0] ^= 0xff;
     return bytes.toString("base64url");
@@ -204,7 +203,9 @@ const SEED = utf8(WORDS);
 
 {
   await assert.rejects(() => openSeed({ ...V2, version: 3 }, "x"), /newer version of Gryt/);
+  // @ts-expect-error -- a version from a newer build, which this one must leave alone
   assert.equal(vaultNeedsUpgrade({ type: VAULT_TYPE, version: 3 }), false, "a newer vault is not ours to re-seal");
+  // @ts-expect-error -- the same newer version
   assert.equal(vaultHasRecoverySlot({ type: VAULT_TYPE, version: 3 }), false);
   await assert.rejects(() => openSeed({ hello: "world" }, "x"), /not a sealed Gryt identity/);
   await assert.rejects(() => sealSeed(SEED, { password: "" }), /Choose a password/);

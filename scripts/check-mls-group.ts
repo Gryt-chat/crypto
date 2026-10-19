@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * A DM through the group engine, over the wire and through saved state at every step. Two
  * people, three devices, one of them removed, and the things a DM has to refuse.
@@ -14,6 +12,8 @@ import {
   createMlsDevice,
   createMlsGroup,
   decodeMlsGroupState,
+  type MlsGroupState,
+  type MlsTrust,
   decryptMlsMessage,
   derivePersonKeyPair,
   encodeMlsGroupState,
@@ -44,18 +44,18 @@ import {
 } from "ts-mls";
 
 const SCOPE = asIdentityScope("srv:engine");
-const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
-const text = (s) => new TextEncoder().encode(s);
-const read = (b) => new TextDecoder().decode(b);
-const hex = (b) => Buffer.from(b).toString("hex");
+const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
+const text = (s: string) => new TextEncoder().encode(s);
+const read = (b: Uint8Array) => new TextDecoder().decode(b);
+const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
 
 const KARI = seed(3);
 const OLA = seed(5);
 const people = new Set([KARI, OLA].map((s) => hex(derivePersonKeyPair(s, SCOPE).publicKey)));
-const trust = { scope: SCOPE, trustPersonKey: (c) => people.has(hex(c.personPublicKey)) };
+const trust: MlsTrust = { scope: SCOPE, trustPersonKey: (c) => people.has(hex(c.personPublicKey)) };
 
 // Every step goes through bytes, the way a client that restarted would pick it up.
-const reload = (state) => decodeMlsGroupState(encodeMlsGroupState(state), trust);
+const reload = (state: MlsGroupState) => decodeMlsGroupState(encodeMlsGroupState(state), trust);
 
 const kariLaptop = createMlsDevice({ seed: KARI, scope: SCOPE, deviceName: "laptop" });
 const kariPhone = createMlsDevice({ seed: KARI, scope: SCOPE, deviceName: "phone" });
@@ -87,7 +87,9 @@ const kpOla = await generateMlsKeyPackage(olaPhone);
   const from = now - MLS_KEY_PACKAGE_BACKDATE;
   const to = from + MLS_KEY_PACKAGE_LIFETIME;
   assert.equal(kp.expiresAt, to);
-  const lifetime = decodeMlsMessage(kp.keyPackage, 0)[0].keyPackage.leafNode.lifetime;
+  const decoded = decodeMlsMessage(kp.keyPackage, 0)?.[0];
+  assert.ok(decoded?.wireformat === "mls_key_package", "the KeyPackage didn't decode as one");
+  const lifetime = decoded.keyPackage.leafNode.lifetime;
   assert.deepEqual(lifetime, { notBefore: BigInt(from), notAfter: BigInt(to) });
 
   await assert.rejects(readMlsKeyPackage(kp.keyPackage, SCOPE, from - 1), /isn't valid yet/);
@@ -98,7 +100,7 @@ const kpOla = await generateMlsKeyPackage(olaPhone);
 
   // Lifetimes the engine never writes: ts-mls's own default runs to 2^63, and one runs backwards.
   const cs = await mlsCiphersuite();
-  const custom = async (lt) => {
+  const custom = async (lt: typeof defaultLifetime) => {
     const { publicPackage } = await generateKeyPackageWithKey(
       { credentialType: "basic", identity: olaPhone.certificate },
       { ...defaultCapabilities(), ciphersuites: [MLS_CIPHERSUITE] },
@@ -118,7 +120,7 @@ const kpOla = await generateMlsKeyPackage(olaPhone);
 
   // Adding goes by this device's clock, which is also the one ts-mls checks against.
   const group = await createMlsGroup(kariLaptop, trust);
-  const at = async (offset) => (await generateMlsKeyPackage(olaPhone, now + offset)).keyPackage;
+  const at = async (offset: number) => (await generateMlsKeyPackage(olaPhone, now + offset)).keyPackage;
   await assert.rejects(addMlsMembers(group, [await at(-31 * DAY)]), /expired/);
   await assert.rejects(addMlsMembers(group, [await at(2 * 60 * 60)]), /isn't valid yet/);
   await assert.rejects(addMlsMembers(group, [kpKariPhone.keyPackage, forever]), /longer than 30 days/);
@@ -135,6 +137,7 @@ const kpOla = await generateMlsKeyPackage(olaPhone);
 
 let laptop = await createMlsGroup(kariLaptop, trust);
 const added = await addMlsMembers(laptop, [kpOla.keyPackage, kpKariPhone.keyPackage]);
+assert.ok(added.welcome, "adding Ola and the phone made no Welcome");
 laptop = reload(added.state);
 forgetMlsSecrets(added.consumed);
 
@@ -158,7 +161,7 @@ assert.deepEqual(
 
 /* ── messages go every way, and each one is padded ─────────────────────── */
 
-async function send(from, to, words) {
+async function send(from: MlsGroupState, to: MlsGroupState[], words: string) {
   const out = await encryptMlsMessage(from, text(words));
   const seen = inspectMlsMessage(out.message);
   assert.equal(seen.wireformat, "mls_private_message");
@@ -179,7 +182,11 @@ async function send(from, to, words) {
   [ola, laptop, phone] = [b.from, ...b.to];
 
   // Text plus its length prefix, rounded up to 256: two lengths in one step look the same.
-  const step = (n) => Math.ceil((n + (n < 64 ? 1 : n < 16384 ? 2 : 4)) / 256);
+  const prefix = (n: number) => {
+    if (n < 64) return 1;
+    return n < 16384 ? 2 : 4;
+  };
+  const step = (n: number) => Math.ceil((n + prefix(n)) / 256);
   const sizes = new Map();
   for (const n of [0, 1, 62, 63, 64, 200, 254, 255, 300, 510, 511, 16380, 16381, 16383, 16384, 16400]) {
     const out = await encryptMlsMessage(laptop, text("x".repeat(n)));
@@ -219,6 +226,7 @@ async function send(from, to, words) {
   const removed = await removeMlsMembers(laptop, [kariPhone.deviceId], SCOPE);
   const r1 = await processMlsMessage(ola, removed.commit);
   const r2 = await processMlsMessage(phone, removed.commit);
+  assert.ok(r1.kind === "handshake" && r2.kind === "handshake", "a removal came back as an application message");
   assert.equal(r1.removed, false);
   assert.equal(r2.removed, true, "the phone doesn't know it was removed");
   laptop = reload(removed.state);
