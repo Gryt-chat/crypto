@@ -126,7 +126,7 @@ the WebCrypto-to-noble conversion and nothing regenerates them — a change that
 quietly altered the envelope would leave every message already sent unreadable.
 `check-identity-vault.mjs` does the same for the sealed seed: three bundles
 sealed by the client before Argon2id, and one from the version that added it.
-`check-mls-provider.mjs` runs the MLS crypto against the RFC 9180, 8032 and 4231
+`check-mls-provider.ts` runs the MLS crypto against the RFC 9180, 8032 and 4231
 known answers with `crypto.subtle` taken away, the way Hermes has it.
 `check-mls-vectors.mjs` runs the 395 suite 1 vectors from RFC 9420's interop
 set on that provider. It fetches them from `mlswg/mls-implementations` at a

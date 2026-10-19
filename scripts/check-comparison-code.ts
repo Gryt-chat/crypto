@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The code two people read to each other (GRYT-730) — the last check standing between
  * somebody and a server in the middle, and every way of getting it wrong is quiet.
@@ -11,8 +9,9 @@ import assert from "node:assert/strict";
  * Pins, in memory. The package does not decide where they live — see
  * `PeerPinStore` — so a check supplies the simplest thing that satisfies it.
  */
-let pins = {};
-const store = {
+type PinStore = Parameters<typeof pinPeerKey>[0];
+let pins: ReturnType<PinStore["read"]> = {};
+const store: PinStore = {
   read: () => pins,
   write: (next) => {
     pins = next;
@@ -35,7 +34,7 @@ const alice = { thumbprint: "tp-alice", dmPublicKey: "dm-alice" };
 const bob = { thumbprint: "tp-bob", dmPublicKey: "dm-bob" };
 const mallory = { thumbprint: "tp-mallory", dmPublicKey: "dm-mallory" };
 
-const digitsOnly = (code) => code.replace(/ /g, "");
+const digitsOnly = (code: string) => code.replace(/ /g, "");
 
 /* ── both sides compute the same string ─────────────────────────────────── */
 
@@ -128,7 +127,7 @@ const digitsOnly = (code) => code.replace(/ /g, "");
 const SCOPE = asIdentityScope("srv:compare");
 const BOB = "user_bob";
 
-const verified = (dm) => ({
+const verified = (dm: number[]) => ({
   identityThumbprint: "tp-bob",
   dmPublicKey: Uint8Array.from(dm),
   scope: SCOPE,
@@ -139,6 +138,7 @@ const verified = (dm) => ({
   const first = verified([1, 2, 3]);
   pinPeerKey(store, SCOPE, BOB, first);
   const pin = getPeerPin(store, SCOPE, BOB);
+  assert.ok(pin, "pinning left no pin");
 
   assert.equal(pin.comparedAt, undefined, "nothing is compared until somebody compares it");
 
@@ -149,7 +149,7 @@ const verified = (dm) => ({
     }),
     true,
   );
-  assert.ok(getPeerPin(store, SCOPE, BOB).comparedAt > 0);
+  assert.ok((getPeerPin(store, SCOPE, BOB)?.comparedAt ?? 0) > 0);
 }
 
 {
@@ -166,7 +166,7 @@ const verified = (dm) => ({
   // Re-pinning the same keys keeps it. This is an ordinary member list landing
   // again, and losing the mark every time one arrived would make it useless.
   pinPeerKey(store, SCOPE, BOB, verified([1, 2, 3]));
-  assert.ok(getPeerPin(store, SCOPE, BOB).comparedAt > 0,
+  assert.ok((getPeerPin(store, SCOPE, BOB)?.comparedAt ?? 0) > 0,
     "the same keys arriving again must not throw away a comparison");
 }
 
@@ -174,7 +174,7 @@ const verified = (dm) => ({
   // A new key. Somebody who compared a code last year and whose peer has since
   // arrived with a different key has verified nothing.
   pinPeerKey(store, SCOPE, BOB, verified([9, 9, 9]));
-  assert.equal(getPeerPin(store, SCOPE, BOB).comparedAt, undefined,
+  assert.equal(getPeerPin(store, SCOPE, BOB)?.comparedAt, undefined,
     "a changed key must take the verified mark with it");
 }
 

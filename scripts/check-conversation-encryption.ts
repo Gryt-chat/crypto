@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * Whether a conversation gets encrypted, and the round trip when it does (GRYT-729). The
  * decision is the dangerous half: a member left out cannot read what they are in.
@@ -20,20 +18,23 @@ import {
 const SCOPE = asIdentityScope("srv:seal");
 const CONVERSATION = "dm_g0123456789abcdef0123456789abcdef";
 
-const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
-const keysFor = (n) => deriveDmKeyPair(seed(n), SCOPE);
+const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
+const keysFor = (n: number) => deriveDmKeyPair(seed(n), SCOPE);
 
 const me = { memberId: "user_me", keys: keysFor(3) };
 const bob = { memberId: "user_bob", keys: keysFor(7) };
 const carol = { memberId: "user_carol", keys: keysFor(11) };
 
+// decideSealing reads only the verified DM key, so the fixtures leave out the rest of the binding and the pin.
+type Member = Parameters<typeof decideSealing>[0]["members"][number];
+
 /** A member whose key this client is happy with. */
-const usable = (person) => ({
+const usable = (person: typeof bob) => ({
   memberId: person.memberId,
   keyState: {
     decision: { kind: "known", verified: { dmPublicKey: person.keys.publicKey } },
   },
-});
+}) as Member;
 
 const self = { memberId: me.memberId, publicKey: me.keys.publicKey };
 
@@ -52,11 +53,12 @@ const self = { memberId: me.memberId, publicKey: me.keys.publicKey };
 /* ── one member short, and nobody gets it sealed ────────────────────────── */
 
 {
-  for (const [label, keyState] of [
+  const shortOne: [string, Member["keyState"]][] = [
     ["published nothing", undefined],
     ["published nothing, explicitly", { decision: { kind: "none" } }],
     ["sent something broken", { decision: { kind: "unusable", reason: "nope" } }],
-  ]) {
+  ];
+  for (const [label, keyState] of shortOne) {
     const decision = decideSealing({
       members: [usable(bob), { memberId: carol.memberId, keyState }],
       self,
@@ -88,7 +90,7 @@ const self = { memberId: me.memberId, publicKey: me.keys.publicKey };
             changedKey: true,
           },
         },
-      },
+      } as Member,
     ],
     self,
   });
@@ -120,7 +122,7 @@ const self = { memberId: me.memberId, publicKey: me.keys.publicKey };
     decision,
   });
 
-  assert.equal(typeof sealed, "string");
+  assert.ok(typeof sealed === "string", "nothing was sealed");
   assert.ok(!sealed.includes("the whole group"), "the plaintext is in the envelope");
 
   for (const person of [me, bob, carol]) {
@@ -130,7 +132,7 @@ const self = { memberId: me.memberId, publicKey: me.keys.publicKey };
         conversationId: CONVERSATION,
         memberId: person.memberId,
         recipientKeys: person.keys,
-      })).text,
+      }))?.text,
       "the whole group should read this",
       `${person.memberId} could not read it`,
     );
@@ -161,6 +163,7 @@ const self = { memberId: me.memberId, publicKey: me.keys.publicKey };
     senderKeys: me.keys,
     decision,
   });
+  assert.ok(sealed, "nothing was sealed");
 
   assert.equal(
     await openForConversation({
@@ -185,7 +188,6 @@ const self = { memberId: me.memberId, publicKey: me.keys.publicKey };
         memberId: me.memberId,
         recipientKeys: me.keys,
       }),
-      undefined,
       `"${junk}" read as an empty message instead of a broken one`,
     );
   }
