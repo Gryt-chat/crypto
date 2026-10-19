@@ -294,6 +294,12 @@ export function forgetMlsSecrets(consumed: Uint8Array[]): void {
   for (const secret of consumed) zeroOutUint8Array(secret);
 }
 
+/** MLS's variable-length prefix for a message of n bytes. */
+function lengthPrefixBytes(n: number): number {
+  if (n < 64) return 1;
+  return n < 16384 ? 2 : 4;
+}
+
 /** Pads to a 256-byte step, so the server sees only roughly how long a message is. */
 export async function encryptMlsMessage(
   state: MlsGroupState,
@@ -301,7 +307,7 @@ export async function encryptMlsMessage(
 ): Promise<{ state: MlsGroupState; message: Uint8Array }> {
   // The length prefix grows at 64 and 16,384 bytes, so it counts towards the step.
   const n = plaintext.length;
-  const padding = (256 - ((n + (n < 64 ? 1 : n < 16384 ? 2 : 4)) % 256)) % 256;
+  const padding = (256 - ((n + lengthPrefixBytes(n)) % 256)) % 256;
   const padded = { ...state, clientConfig: { ...state.clientConfig, paddingConfig: { kind: "alwaysPad" as const, paddingLength: padding } } };
   const r = await createApplicationMessage(padded, plaintext, await mlsCiphersuite());
   forgetMlsSecrets(r.consumed);

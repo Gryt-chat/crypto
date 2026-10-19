@@ -42,7 +42,7 @@ export default tseslint.config(
     ],
     rules: { "@typescript-eslint/no-restricted-types": "off" },
   },
-  // unknown: not typed yet.
+  // unknown: identity-vault checks a stored vault before using it; mls-provider's is inside the casts below.
   {
     files: [
       "src/identity-vault.ts",
@@ -50,23 +50,7 @@ export default tseslint.config(
     ],
     rules: { "@typescript-eslint/no-restricted-types": "off" },
   },
-  // Nested ternaries from before the rule.
-  {
-    files: [
-      "src/history-chunks.ts",
-      "src/mls-group.ts",
-    ],
-    rules: { "no-nested-ternary": "off" },
-  },
-  // Non-null assertions from before the rule.
-  {
-    files: [
-      "src/history-chunks.ts",
-      "src/recovery-key.ts",
-    ],
-    rules: { "@typescript-eslint/no-non-null-assertion": "off" },
-  },
-  // Casts through unknown where the types don't line up yet.
+  // ts-mls types its keys as opaque, so mls-provider casts its raw x25519 keys to and from them.
   {
     files: [
       "src/mls-provider.ts",

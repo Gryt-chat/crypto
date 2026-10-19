@@ -65,6 +65,8 @@ const aadFor = (id: Uint8Array, scope: string) => concatBytes(lp(utf8(LABEL)), l
 const dayOf = (sentAt: number) => Math.floor(sentAt / DAY_MS);
 const isText = (v: unknown): v is string => typeof v === "string" && v !== "";
 const isTime = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) >= 0;
+const isIntIn = (v: unknown, min: number, max: number): v is number =>
+  Number.isSafeInteger(v) && (v as number) >= min && (v as number) <= max;
 
 /** One spelling per value, so two entries can't name the same chunk differently. */
 function isCanonical(text: string, length: number): boolean {
@@ -99,9 +101,9 @@ function checkRecord(value: unknown): HistoryRecord {
 export function planHistoryChunks(records: readonly HistoryRecord[]): HistoryRecord[][] {
   const sorted = records.map(checkRecord).sort((a, b) =>
     dayOf(b.sentAt) - dayOf(a.sentAt) ||
-    (a.scope < b.scope ? -1 : a.scope > b.scope ? 1 : 0) ||
+    (a.scope < b.scope ? -1 : Number(a.scope > b.scope)) ||
     b.sentAt - a.sentAt ||
-    (a.messageId < b.messageId ? -1 : a.messageId > b.messageId ? 1 : 0));
+    (a.messageId < b.messageId ? -1 : Number(a.messageId > b.messageId)));
 
   const chunks: HistoryRecord[][] = [];
   let current: HistoryRecord[] = [];
@@ -213,16 +215,17 @@ export function openHistoryChunk(
 
 export function parseHistoryChunkEntry(value: unknown): HistoryChunkEntry {
   const e = value as Partial<HistoryChunkEntry> | null;
-  const ok =
-    !!e && typeof e === "object" &&
-    isText(e.id) && isText(e.scope) && isText(e.sha256) &&
-    isTime(e.first) && isTime(e.last) && e.first <= e.last &&
-    Number.isSafeInteger(e.count) && e.count! >= 1 && e.count! <= HISTORY_CHUNK_MAX_RECORDS &&
-    Number.isSafeInteger(e.bytes) && e.bytes! > NONCE_BYTES && e.bytes! <= HISTORY_CHUNK_MAX_BYTES;
-  if (!ok || !isCanonical(e.id!, ID_BYTES) || !isCanonical(e.sha256!, 32)) {
+  if (
+    !e || typeof e !== "object" ||
+    !isText(e.id) || !isText(e.scope) || !isText(e.sha256) ||
+    !isTime(e.first) || !isTime(e.last) || e.first > e.last ||
+    !isIntIn(e.count, 1, HISTORY_CHUNK_MAX_RECORDS) ||
+    !isIntIn(e.bytes, NONCE_BYTES + 1, HISTORY_CHUNK_MAX_BYTES) ||
+    !isCanonical(e.id, ID_BYTES) || !isCanonical(e.sha256, 32)
+  ) {
     throw new Error("A history manifest entry isn't valid.");
   }
-  return { id: e.id!, scope: e.scope!, first: e.first!, last: e.last!, count: e.count!, bytes: e.bytes!, sha256: e.sha256! };
+  return { id: e.id, scope: e.scope, first: e.first, last: e.last, count: e.count, bytes: e.bytes, sha256: e.sha256 };
 }
 
 /** The manifest from the pairing envelope's `history.manifest`. Ids have to be unique. */

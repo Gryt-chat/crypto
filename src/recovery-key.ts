@@ -18,7 +18,7 @@ export function generateRecoveryKey(): Uint8Array {
 /** Groups of four with dashes, 13 of them. The last character carries 1 bit and 4 zeros. */
 export function formatRecoveryKey(key: Uint8Array): string {
   if (key.length !== RECOVERY_KEY_BYTES) throw new Error(`A recovery key is ${RECOVERY_KEY_BYTES} bytes.`);
-  return crockfordEncode(key).match(new RegExp(`.{1,${GROUP}}`, "g"))!.join("-");
+  return (crockfordEncode(key).match(new RegExp(`.{1,${GROUP}}`, "g")) ?? []).join("-");
 }
 
 /**
