@@ -18,15 +18,9 @@ docs/mls-library-check/web-run.mjs
 scripts/check-mls-vectors.mjs
 
 # Still to move to TypeScript (GRYT-1800).
-scripts/check-attachments.mjs
-scripts/check-comparison-code.mjs
-scripts/check-conversation-encryption.mjs
 scripts/check-identity-vault.mjs
-scripts/check-member-keys.mjs
-scripts/check-message-keys.mjs
 scripts/check-mls-credentials.mjs
 scripts/check-mls-group.mjs
-scripts/check-mls-provider.mjs
 scripts/check-pairing.mjs
 scripts/check-peer-keys.mjs
 scripts/check-person-key-pins.mjs

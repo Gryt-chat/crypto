@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * A message key wrapped once per member (GRYT-718). Almost none of these fails loudly: a
  * message readable by somebody who left encrypts and decrypts perfectly well.
@@ -8,6 +6,7 @@
 import assert from "node:assert/strict";
 
 import {
+  asIdentityScope,
   deriveDmKeyPair,
 } from "../dist/index.js";
 import {
@@ -16,22 +15,23 @@ import {
   SEALED_MESSAGE_TYPE,
 } from "../dist/index.js";
 
-const HOST = "chat.example.invalid";
+const HOST = asIdentityScope("chat.example.invalid");
 const CONVERSATION = "dm_g0123456789abcdef0123456789abcdef";
 const OTHER_CONVERSATION = "dm_gfedcba9876543210fedcba9876543210";
 
-const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
+const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
 
 const alice = { id: "alice", keys: deriveDmKeyPair(seed(7), HOST) };
 const bob = { id: "bob", keys: deriveDmKeyPair(seed(11), HOST) };
 const carol = { id: "carol", keys: deriveDmKeyPair(seed(13), HOST) };
 const mallory = { id: "mallory", keys: deriveDmKeyPair(seed(17), HOST) };
 
-const asRecipient = (p) => ({ memberId: p.id, publicKey: p.keys.publicKey });
+type Person = typeof alice;
+const asRecipient = (p: Person) => ({ memberId: p.id, publicKey: p.keys.publicKey });
 const group = [alice, bob, carol].map(asRecipient);
 
 /** The text only. `openMessage` returns `{ text, attachments }` since GRYT-729. */
-const read = async (sealed, person, conversation = CONVERSATION) =>
+const read = async (sealed: Parameters<typeof openMessage>[0]["sealed"], person: Person, conversation = CONVERSATION) =>
   (await openMessage({
     sealed,
     conversationId: conversation,
@@ -39,7 +39,7 @@ const read = async (sealed, person, conversation = CONVERSATION) =>
     recipientKeys: person.keys,
   }))?.text ?? null;
 
-const seal = (plaintext, recipients = group, sender = alice, conversation = CONVERSATION) =>
+const seal = (plaintext: string, recipients = group, sender = alice, conversation = CONVERSATION) =>
   sealMessage({
     plaintext,
     conversationId: conversation,
@@ -198,6 +198,7 @@ const seal = (plaintext, recipients = group, sender = alice, conversation = CONV
 
   await assert.rejects(
     openMessage({
+      // @ts-expect-error -- a version this build doesn't know, which it has to refuse
       sealed: { ...(await seal("v2 someday")), version: 2 },
       conversationId: CONVERSATION,
       memberId: bob.id,

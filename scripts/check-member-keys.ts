@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * What a member list does to your pins (GRYT-727). Pinning on a change rather than a first
  * sighting turns the design off silently, and pinning your own row lets a server rewrite it.
@@ -11,8 +9,9 @@ import assert from "node:assert/strict";
  * Pins, in memory. The package does not decide where they live — see
  * `PeerPinStore` — so a check supplies the simplest thing that satisfies it.
  */
-let pins = {};
-const store = {
+type Evaluate = Parameters<typeof evaluate>[0];
+let pins: ReturnType<Evaluate["store"]["read"]> = {};
+const store: Evaluate["store"] = {
   read: () => pins,
   write: (next) => {
     pins = next;
@@ -31,7 +30,7 @@ const { getPeerPin } = await import("../dist/index.js");
 const { evaluateMemberKeys: evaluate } = await import("../dist/index.js");
 
 const SCOPE = asIdentityScope("srv:members");
-const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
+const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
 
 async function identity() {
   const pair = await crypto.subtle.generateKey(
@@ -45,8 +44,6 @@ async function identity() {
   };
 }
 
-const base64Url = (bytes) => Buffer.from(bytes).toString("base64url");
-
 const bob = await identity();
 const mallory = await identity();
 
@@ -59,7 +56,7 @@ const bind = ({ who = bob, dmSeed = 7 } = {}) =>
   });
 
 /** The real policy, with this file's scope and key filled in. */
-const evaluateMemberKeys = ({ members, myServerUserId, ownKey = null }) =>
+const evaluateMemberKeys = ({ members, myServerUserId, ownKey = null }: Pick<Evaluate, "members" | "myServerUserId"> & { ownKey?: Uint8Array | null }) =>
   evaluate({ store, scope: SCOPE, ownKey, members, myServerUserId });
 
 const ME = "user_me";
@@ -92,14 +89,15 @@ const myKey = deriveDmKeyPair(seed(3), SCOPE).publicKey;
 /* ── a changed one is reported and NOT pinned ───────────────────────────── */
 
 {
-  const before = getPeerPin(store, SCOPE, BOB).thumbprint;
+  const before = getPeerPin(store, SCOPE, BOB)?.thumbprint;
+  assert.ok(before, "bob was never pinned");
   const states = await evaluateMemberKeys({
     members: [{ serverUserId: BOB, dmKeyBinding: await bind({ who: mallory }) }],
     myServerUserId: ME,
   });
 
   assert.equal(states[BOB].decision.kind, "changed");
-  assert.equal(getPeerPin(store, SCOPE, BOB).thumbprint, before,
+  assert.equal(getPeerPin(store, SCOPE, BOB)?.thumbprint, before,
     "a changed key that gets pinned anyway is the whole design switched off, silently");
 
   // And again, because a policy that gives in on the second member list gives in.
@@ -107,7 +105,7 @@ const myKey = deriveDmKeyPair(seed(3), SCOPE).publicKey;
     members: [{ serverUserId: BOB, dmKeyBinding: await bind({ who: mallory }) }],
     myServerUserId: ME,
   });
-  assert.equal(getPeerPin(store, SCOPE, BOB).thumbprint, before);
+  assert.equal(getPeerPin(store, SCOPE, BOB)?.thumbprint, before);
 }
 
 /* ── your own row is never pinned ───────────────────────────────────────── */

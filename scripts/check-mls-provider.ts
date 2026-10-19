@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * The HPKE and signatures under MLS, against RFC 9180, 8032 and 4231 known answers. A wrong
  * byte here is a group nobody can join, so a failing vector means the code is wrong.
@@ -32,8 +30,8 @@ const {
   acceptAll,
 } = await import("ts-mls");
 
-const hex = (b) => Buffer.from(b).toString("hex");
-const unhex = (s) => new Uint8Array(Buffer.from(s, "hex"));
+const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
+const unhex = (s: string) => new Uint8Array(Buffer.from(s, "hex"));
 const enc = new TextEncoder();
 
 const cs = await getCiphersuiteImpl(getCiphersuiteFromName(MLS_CIPHERSUITE), grytMlsCryptoProvider);
@@ -42,7 +40,7 @@ const { hpke, signature, hash, kdf } = cs;
 /* ── RFC 9180 A.1.1: DHKEM(X25519, HKDF-SHA256), HKDF-SHA256, AES-128-GCM ── */
 
 {
-  const v = JSON.parse(readFileSync(new URL("./fixtures/hpke-rfc9180-a11.json", import.meta.url)));
+  const v = JSON.parse(readFileSync(new URL("./fixtures/hpke-rfc9180-a11.json", import.meta.url), "utf8"));
 
   const r = await hpke.deriveKeyPair(unhex(v.ikmR));
   assert.equal(hex(await hpke.exportPrivateKey(r.privateKey)), v.skRm, "DeriveKeyPair(ikmR) gave the wrong skR");
@@ -152,12 +150,12 @@ const { hpke, signature, hash, kdf } = cs;
 /* ── ts-mls pinned exactly, at 1.6.4 or later (GHSA-gwp3-968w-m7gv) ──── */
 
 {
-  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url)));
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   const pinned = pkg.dependencies["ts-mls"];
   assert.match(pinned, /^\d+\.\d+\.\d+$/, "ts-mls has to be pinned exactly, since mixed versions reject each other's commits");
   const [major, minor, patch] = pinned.split(".").map(Number);
   assert.ok(major > 1 || (major === 1 && (minor > 6 || (minor === 6 && patch >= 4))), "ts-mls below 1.6.4 lets a removed member read on");
-  const installed = JSON.parse(readFileSync(new URL("../node_modules/ts-mls/package.json", import.meta.url))).version;
+  const installed = JSON.parse(readFileSync(new URL("../node_modules/ts-mls/package.json", import.meta.url), "utf8")).version;
   assert.equal(installed, pinned, "the installed ts-mls is not the pinned one");
 }
 
@@ -171,7 +169,7 @@ await assert.rejects(
 /* ── and ts-mls runs on it: two members, one message, no WebCrypto ─────── */
 
 {
-  const kp = (name) =>
+  const kp = (name: string) =>
     generateKeyPackage({ credentialType: "basic", identity: enc.encode(name) }, defaultCapabilities(), defaultLifetime, [], cs);
   const [a, b] = await Promise.all([kp("alice"), kp("bob")]);
   let alice = await createGroup(enc.encode("g"), a.publicPackage, a.privatePackage, [], cs);
@@ -180,12 +178,16 @@ await assert.rejects(
     ratchetTreeExtension: true,
   });
   alice = added.newState;
-  const welcome = decodeMlsMessage(encodeMlsMessage({ version: "mls10", wireformat: "mls_welcome", welcome: added.welcome }), 0)[0];
+  assert.ok(added.welcome, "adding bob made no Welcome");
+  const welcome = decodeMlsMessage(encodeMlsMessage({ version: "mls10", wireformat: "mls_welcome", welcome: added.welcome }), 0)?.[0];
+  assert.ok(welcome?.wireformat === "mls_welcome", "the Welcome didn't decode as one");
   const bob = await joinGroup(welcome.welcome, b.publicPackage, b.privatePackage, emptyPskIndex, cs);
   const sent = await createApplicationMessage(alice, enc.encode("hello from noble"), cs);
   const wire = encodeMlsMessage({ version: "mls10", wireformat: "mls_private_message", privateMessage: sent.privateMessage });
-  const got = await processMessage(decodeMlsMessage(wire, 0)[0], bob, emptyPskIndex, acceptAll, cs);
-  assert.equal(got.kind, "applicationMessage");
+  const received = decodeMlsMessage(wire, 0)?.[0];
+  assert.ok(received?.wireformat === "mls_private_message", "the message didn't decode as a private one");
+  const got = await processMessage(received, bob, emptyPskIndex, acceptAll, cs);
+  assert.ok(got.kind === "applicationMessage", `processing gave ${got.kind}`);
   assert.equal(new TextDecoder().decode(got.message), "hello from noble");
 }
 

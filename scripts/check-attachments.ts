@@ -1,5 +1,3 @@
-/* eslint-env node */
-
 /**
  * A file the server stores and cannot read (GRYT-729). Every case here is one where getting
  * it wrong looks like nothing being wrong. Against `dist`, which is what a client installs.
@@ -20,18 +18,19 @@ const SCOPE = asIdentityScope("srv:attachments");
 const CONVERSATION = "dm_g0123456789abcdef0123456789abcdef";
 const OTHER = "dm_gfedcba9876543210fedcba9876543210";
 
-const seed = (n) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
+const seed = (n: number) => Uint8Array.from({ length: 32 }, (_, i) => (i * n + n) % 251);
 const alice = { id: "user_alice", keys: deriveDmKeyPair(seed(3), SCOPE) };
 const bob = { id: "user_bob", keys: deriveDmKeyPair(seed(7), SCOPE) };
 const carol = { id: "user_carol", keys: deriveDmKeyPair(seed(11), SCOPE) };
 
-const asRecipient = (p) => ({ memberId: p.id, publicKey: p.keys.publicKey });
+type Person = typeof alice;
+const asRecipient = (p: Person) => ({ memberId: p.id, publicKey: p.keys.publicKey });
 const pair = [alice, bob].map(asRecipient);
 
 /** A file with bytes above 0x7f in it, which is where a lazy encoding breaks. */
 const FILE = Uint8Array.from({ length: 5000 }, (_, i) => (i * 31) % 256);
 
-const read = (sealed, person, conversation = CONVERSATION) =>
+const read = (sealed: Parameters<typeof openMessage>[0]["sealed"], person: Person, conversation = CONVERSATION) =>
   openMessage({
     sealed,
     conversationId: conversation,
@@ -150,6 +149,7 @@ const read = (sealed, person, conversation = CONVERSATION) =>
   assert.ok(!wire.includes("receipts.pdf"), "the file name is in the envelope in the clear");
 
   const opened = await read(sealed, bob);
+  assert.ok(opened, "bob could not open it");
   assert.deepEqual(opened.attachments.file_1, meta,
     "the recipient has to get back exactly what the sender put in");
   assert.equal(opened.text, "here it is");
@@ -188,6 +188,7 @@ const read = (sealed, person, conversation = CONVERSATION) =>
 
   // Swapped by whoever stores the envelope. Without the file id in the wrapping context this
   // hands back the wrong key, which fails at the file and reads like corruption.
+  assert.ok(sealed.files, "the files went missing from the envelope");
   const tampered = {
     ...sealed,
     files: { file_1: sealed.files.file_2, file_2: sealed.files.file_1 },
@@ -214,6 +215,7 @@ const read = (sealed, person, conversation = CONVERSATION) =>
   assert.equal("files" in sealed, false, "an empty files map changes the envelope");
 
   const opened = await read(sealed, bob);
+  assert.ok(opened, "bob could not open it");
   assert.deepEqual(opened.attachments, {},
     "a caller looping over attachments must not have to null-check first");
 }
