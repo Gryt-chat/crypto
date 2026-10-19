@@ -27,6 +27,7 @@
   "scripts": {
     "build": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.json && node scripts/add-esm-extensions.mjs",
     "typecheck": "tsc -p tsconfig.check.json",
+    "lint": "eslint .",
     "test": "for f in scripts/check-*.mjs; do node \"$f\" || exit 1; done",
     "prepublishOnly": "npm run build && npm test"
   },
@@ -39,8 +40,11 @@
     "ts-mls": "1.6.4"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/node": "^20.19.33",
-    "typescript": "^5.9.3"
+    "eslint": "^9.39.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.2"
   },
   "publishConfig": {
     "access": "public"
