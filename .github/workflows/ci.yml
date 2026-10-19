@@ -19,6 +19,7 @@ jobs:
 
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - run: npm run build
 
       # Against `dist`, not `src`: `add-esm-extensions.mjs` rewrites every specifier on the
