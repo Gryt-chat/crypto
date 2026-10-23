@@ -49,7 +49,8 @@ async function dm(): Promise<{ kari: MlsGroupState; ola: MlsGroupState }> {
   const kari = await createMlsGroup(kariLaptop, trust);
   const kp = await generateMlsKeyPackage(olaPhone);
   const add = await addMlsMembers(kari, [kp.keyPackage]);
-  return { kari: add.state, ola: await joinMlsGroup(add.welcome!, kp.keyPackage, kp.privatePackage, trust) };
+  assert.ok(add.welcome, "adding Ola made no Welcome");
+  return { kari: add.state, ola: await joinMlsGroup(add.welcome, kp.keyPackage, kp.privatePackage, trust) };
 }
 
 async function says(from: MlsGroupState, to: MlsGroupState, body: string) {
@@ -84,7 +85,8 @@ async function says(from: MlsGroupState, to: MlsGroupState, body: string) {
   const kari = await createMlsGroup(kariLaptop, lenient);
   const kp = await generateMlsKeyPackage(olaPhone);
   const add = await addMlsMembers(kari, [kp.keyPackage]);
-  const ola = await joinMlsGroup(add.welcome!, kp.keyPackage, kp.privatePackage, lenient);
+  assert.ok(add.welcome, "adding Ola made no Welcome");
+  const ola = await joinMlsGroup(add.welcome, kp.keyPackage, kp.privatePackage, lenient);
   const per = await joinMlsGroupExternally({ groupInfo: await mlsGroupInfoForJoining(ola), device: perLaptop, trust: lenient });
   await assert.rejects(processMlsMessage(ola, per.commit, SCOPE), /somebody already in this DM/);
   await assert.rejects(processMlsMessage(add.state, per.commit, SCOPE), /somebody already in this DM/);
