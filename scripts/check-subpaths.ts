@@ -34,6 +34,7 @@ const MODULES = [
   "history-chunks",
   "identity-backup",
   "identity-vault",
+  "key-handover",
   "member-keys",
   "message-keys",
   "mls-authentication",

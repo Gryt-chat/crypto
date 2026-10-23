@@ -15,6 +15,7 @@ export * from "./dm-keys";
 export * from "./history-chunks";
 export * from "./identity-backup";
 export * from "./identity-vault";
+export * from "./key-handover";
 export * from "./member-keys";
 export * from "./message-keys";
 export * from "./pairing";

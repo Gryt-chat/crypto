@@ -4,6 +4,7 @@
  */
 
 import { base64Url } from "./base64";
+import { keyHandoverChain } from "./key-handover";
 import {
   evaluatePeerKey,
   evaluatePersonKey,
@@ -11,6 +12,7 @@ import {
   type PeerPinStore,
   type PersonKeyDecision,
   pinPeerKey,
+  markPeerCompared,
   pinPersonKey,
 } from "./peer-keys";
 import type { IdentityScope } from "./scope";
@@ -28,6 +30,8 @@ export interface MemberKeyState {
   personKey: PersonKeyDecision;
   /** Like `ownKeyRewritten`, for the person key, when `ownPersonKey` was given. */
   ownPersonKeyRewritten?: boolean;
+  /** Their identity moved, and their old key signed for the new one (GRYT-1876): re-pinned here. */
+  handedOver?: boolean;
 }
 
 /**
@@ -52,7 +56,13 @@ export async function evaluateMemberKeys({
   ownKey: Uint8Array | null;
   /** The public half of `derivePersonKeyPair`, for the same self-check. */
   ownPersonKey?: Uint8Array | null;
-  members: { serverUserId: string; dmKeyBinding?: string | null; personKeyBinding?: string | null }[];
+  members: {
+    serverUserId: string;
+    dmKeyBinding?: string | null;
+    personKeyBinding?: string | null;
+    /** Signed by identities they left, each naming the next (GRYT-1876). */
+    keyHandovers?: readonly string[] | null;
+  }[];
   /** Null before the member list has said which row is yours. */
   myServerUserId: string | null;
 }): Promise<Record<string, MemberKeyState>> {
@@ -64,7 +74,7 @@ export async function evaluateMemberKeys({
   for (const member of members) {
     const isSelf = member.serverUserId === myServerUserId;
 
-    const decision = await evaluatePeerKey({
+    let decision = await evaluatePeerKey({
       store,
       scope,
       memberId: member.serverUserId,
@@ -73,6 +83,22 @@ export async function evaluateMemberKeys({
 
     if (decision.kind === "first" && !isSelf) {
       pinPeerKey(store, scope, member.serverUserId, decision.verified);
+    }
+
+    // The only re-pin that happens by itself: the identity that was pinned signed for the new one.
+    let handedOver = false;
+    if (
+      decision.kind === "changed" &&
+      decision.changedIdentity &&
+      !isSelf &&
+      keyHandoverChain(member.keyHandovers ?? [], scope, decision.pin.thumbprint, decision.verified.identityThumbprint)
+    ) {
+      const comparedAt = decision.pin.comparedAt;
+      const pin = pinPeerKey(store, scope, member.serverUserId, decision.verified);
+      // A comparison made against the old key still holds: that key vouched for this one.
+      if (comparedAt !== undefined) markPeerCompared(store, scope, member.serverUserId, pin, comparedAt);
+      handedOver = true;
+      decision = await evaluatePeerKey({ store, scope, memberId: member.serverUserId, binding: member.dmKeyBinding });
     }
 
     const personKey = await evaluatePersonKey({
@@ -86,7 +112,7 @@ export async function evaluateMemberKeys({
       pinPersonKey(store, scope, member.serverUserId, personKey.verified);
     }
 
-    const state: MemberKeyState = { decision, isSelf, personKey };
+    const state: MemberKeyState = { decision, isSelf, personKey, ...(handedOver ? { handedOver } : {}) };
 
     if (isSelf && mine && decision.kind !== "none") {
       const shown =
