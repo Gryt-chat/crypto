@@ -15,6 +15,7 @@ import {
   createApplicationMessage,
   createCommit,
   createGroup,
+  createGroupInfoWithExternalPubAndRatchetTree,
   decodeGroupState,
   decodeMlsMessage,
   defaultCapabilities,
@@ -27,6 +28,7 @@ import {
   getCiphersuiteFromName,
   getCiphersuiteImpl,
   joinGroup,
+  joinGroupExternal,
   processMessage,
   zeroOutUint8Array,
 } from "ts-mls";
@@ -102,14 +104,18 @@ function clientConfig(trust: MlsTrust): ClientConfig {
 }
 
 /**
- * DMs take adds, removes and updates from members, and nothing else: no external senders, no
- * extension changes, no ReInit. That's what keeps the server from ever adding anybody.
+ * DMs take adds, removes and updates from members, and an external join that only brings in its
+ * own leaf (GRYT-1859). `processMlsMessage` then checks that joiner is a person already in the group.
  */
 const dmPolicy: IncomingMessageCallback = (incoming) => {
   const allowed = (p: { proposal: Proposal; senderLeafIndex: number | undefined }) =>
     p.senderLeafIndex !== undefined && ["add", "remove", "update"].includes(String(p.proposal.proposalType));
   if (incoming.kind === "proposal") return allowed(incoming.proposal) ? "accept" : "reject";
-  return incoming.senderLeafIndex !== undefined && incoming.proposals.every(allowed) ? "accept" : "reject";
+  if (incoming.senderLeafIndex !== undefined) return incoming.proposals.every(allowed) ? "accept" : "reject";
+  // An external commit: one external_init, and at most the joiner's own old leaf removed (resync).
+  const kinds = incoming.proposals.map((p) => String(p.proposal.proposalType));
+  const inits = kinds.filter((k) => k === "external_init").length;
+  return inits === 1 && kinds.every((k) => k === "external_init" || k === "remove") ? "accept" : "reject";
 };
 
 function wire(message: MLSMessage): Uint8Array {
@@ -321,8 +327,11 @@ export type MlsProcessed =
   | { kind: "application"; state: MlsGroupState; plaintext: Uint8Array }
   | { kind: "handshake"; state: MlsGroupState; removed: boolean };
 
-/** A commit, a proposal or a message. Throws on anything it can't or won't accept. */
-export async function processMlsMessage(state: MlsGroupState, bytes: Uint8Array): Promise<MlsProcessed> {
+/**
+ * A commit, a proposal or a message. Throws on anything it can't or won't accept. Without `scope`
+ * an external join is refused, since who joined can't be checked.
+ */
+export async function processMlsMessage(state: MlsGroupState, bytes: Uint8Array, scope?: IdentityScope): Promise<MlsProcessed> {
   const m = unwire(bytes);
   if (m.wireformat !== "mls_private_message" && m.wireformat !== "mls_public_message") {
     throw new Error("That isn't a group message.");
@@ -331,10 +340,85 @@ export async function processMlsMessage(state: MlsGroupState, bytes: Uint8Array)
   if (base64Url(groupId) !== base64Url(state.groupContext.groupId)) throw new Error("That message is for another group.");
 
   const r = await processMessage(m, state, emptyPskIndex, dmPolicy, await mlsCiphersuite());
+  // Checked before the old epoch's secrets go, so a refusal leaves the caller's state usable.
+  if (r.kind !== "applicationMessage" && r.actionTaken === "accept" && m.wireformat === "mls_public_message") {
+    if (m.publicMessage.content.sender.senderType === "new_member_commit") {
+      if (!scope) throw new Error("An external join needs the scope to check who joined.");
+      checkExternalJoin(state, r.newState, scope);
+    }
+  }
   forgetMlsSecrets(r.consumed);
   if (r.kind === "applicationMessage") return { kind: "application", state: r.newState, plaintext: r.message };
   if (r.actionTaken !== "accept") throw new Error("That commit or proposal isn't allowed in a DM.");
   return { kind: "handshake", state: r.newState, removed: r.newState.groupActiveState.kind === "removedFromGroup" };
+}
+
+/**
+ * What a device outside the group needs to join it by itself: the GroupInfo with the external
+ * public key and the tree, signed by this member. Public, so the server may hold it.
+ */
+export async function mlsGroupInfoForJoining(state: MlsGroupState): Promise<Uint8Array> {
+  const groupInfo = await createGroupInfoWithExternalPubAndRatchetTree(state, [], await mlsCiphersuite());
+  return wire({ version: "mls10", wireformat: "mls_group_info", groupInfo });
+}
+
+/**
+ * Joins from a GroupInfo with an external commit, as this device. `resync` replaces this device's
+ * own old leaf, for a device that lost its state. Send `commit` like any other.
+ */
+export async function joinMlsGroupExternally({
+  groupInfo,
+  device,
+  trust,
+  resync = false,
+}: {
+  groupInfo: Uint8Array;
+  device: MlsDevice;
+  trust: MlsTrust;
+  resync?: boolean;
+}): Promise<{ state: MlsGroupState; commit: Uint8Array }> {
+  const m = unwire(groupInfo);
+  if (m.wireformat !== "mls_group_info") throw new Error("That isn't a GroupInfo.");
+  const own = await generateMlsKeyPackage(device);
+  const r = await joinGroupExternal(
+    m.groupInfo,
+    keyPackageOf(own.keyPackage),
+    readPrivatePackage(own.privatePackage),
+    resync,
+    await mlsCiphersuite(),
+    undefined,
+    clientConfig(trust),
+  );
+  return { state: r.newState, commit: wire({ version: "mls10", wireformat: "mls_public_message", publicMessage: r.publicMessage }) };
+}
+
+const personOf = (c: DeviceCertificate) => base64Url(c.personPublicKey);
+/** Every leaf with the person it belongs to, keyed by its encryption key, which a rejoin always renews. */
+function leavesOf(state: MlsGroupState, scope: IdentityScope): Map<string, string> {
+  const out = new Map<string, string>();
+  state.ratchetTree.forEach((node, index) => {
+    if (index % 2 !== 0 || node?.nodeType !== "leaf") return;
+    const certificate = deviceCertificateOf(node.leaf.credential, scope);
+    if (!certificate) throw new Error("A leaf in this group has no certificate, which the checks should have refused.");
+    out.set(base64Url(node.leaf.hpkePublicKey), personOf(certificate));
+  });
+  return out;
+}
+
+/**
+ * After an external commit: exactly one device came in, it belongs to somebody already in the
+ * group, and the only leaf it took out was its own person's. A valid certificate can't add a person.
+ */
+function checkExternalJoin(before: MlsGroupState, after: MlsGroupState, scope: IdentityScope): void {
+  const was = leavesOf(before, scope);
+  const now = leavesOf(after, scope);
+  const joined = [...now].filter(([key]) => !was.has(key)).map(([, person]) => person);
+  if (joined.length !== 1 || ![...was.values()].includes(joined[0])) {
+    throw new Error("An external join may only bring in a device of somebody already in this DM.");
+  }
+  if ([...was].some(([key, person]) => !now.has(key) && person !== joined[0])) {
+    throw new Error("An external join may only take out its own person's leaf.");
+  }
 }
 
 /** `processMlsMessage` for when only a message will do. */
