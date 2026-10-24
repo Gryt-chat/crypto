@@ -38,7 +38,7 @@
     "@noble/hashes": "^2.3.0",
     "@scure/bip39": "^2.3.0",
     "fflate": "0.8.3",
-    "ts-mls": "1.6.4"
+    "ts-mls": "npm:@gryt/ts-mls@1.6.4-gryt.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
