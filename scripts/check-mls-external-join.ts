@@ -5,6 +5,8 @@
 
 import assert from "node:assert/strict";
 
+import { decodeMlsMessage, defaultCapabilities, defaultLifetime, encodeMlsMessage, generateKeyPackageWithKey, joinGroupExternal } from "ts-mls";
+
 import {
   addMlsMembers,
   asIdentityScope,
@@ -16,11 +18,15 @@ import {
   generateMlsKeyPackage,
   joinMlsGroup,
   joinMlsGroupExternally,
+  MLS_CIPHERSUITE,
+  mlsCiphersuite,
+  type MlsDevice,
   type MlsGroupState,
   mlsGroupInfoForJoining,
   mlsGroupMembers,
   type MlsTrust,
   processMlsMessage,
+  removeMlsMembers,
 } from "../dist/index.js";
 
 const SCOPE = asIdentityScope("srv:external-join");
@@ -51,6 +57,23 @@ async function dm(): Promise<{ kari: MlsGroupState; ola: MlsGroupState }> {
   const add = await addMlsMembers(kari, [kp.keyPackage]);
   assert.ok(add.welcome, "adding Ola made no Welcome");
   return { kari: add.state, ola: await joinMlsGroup(add.welcome, kp.keyPackage, kp.privatePackage, trust) };
+}
+
+/* An external join made straight with ts-mls, as a client without our checks would. */
+async function joinRaw(groupInfo: Uint8Array, device: MlsDevice): Promise<Uint8Array> {
+  const cs = await mlsCiphersuite();
+  const kp = await generateKeyPackageWithKey(
+    { credentialType: "basic", identity: device.certificate },
+    { ...defaultCapabilities(), ciphersuites: [MLS_CIPHERSUITE] },
+    defaultLifetime,
+    [],
+    { signKey: device.signKey, publicKey: device.publicKey },
+    cs,
+  );
+  const m = decodeMlsMessage(groupInfo, 0)?.[0];
+  if (m?.wireformat !== "mls_group_info") throw new Error("not a GroupInfo");
+  const r = await joinGroupExternal(m.groupInfo, kp.publicPackage, kp.privatePackage, false, cs);
+  return encodeMlsMessage({ version: "mls10", wireformat: "mls_public_message", publicMessage: r.publicMessage });
 }
 
 async function says(from: MlsGroupState, to: MlsGroupState, body: string) {
@@ -87,11 +110,25 @@ async function says(from: MlsGroupState, to: MlsGroupState, body: string) {
   const add = await addMlsMembers(kari, [kp.keyPackage]);
   assert.ok(add.welcome, "adding Ola made no Welcome");
   const ola = await joinMlsGroup(add.welcome, kp.keyPackage, kp.privatePackage, lenient);
-  const per = await joinMlsGroupExternally({ groupInfo: await mlsGroupInfoForJoining(ola), device: perLaptop, trust: lenient });
-  await assert.rejects(processMlsMessage(ola, per.commit, SCOPE), /somebody already in this DM/);
-  await assert.rejects(processMlsMessage(add.state, per.commit, SCOPE), /somebody already in this DM/);
+  const groupInfo = await mlsGroupInfoForJoining(ola);
+  await assert.rejects(joinMlsGroupExternally({ groupInfo, device: perLaptop, trust: lenient }), /a member has to add this one/);
+  // A client without that check still can, so members refuse it too.
+  const perCommit = await joinRaw(groupInfo, perLaptop);
+  await assert.rejects(processMlsMessage(ola, perCommit, SCOPE), /somebody already in this DM/);
+  await assert.rejects(processMlsMessage(add.state, perCommit, SCOPE), /somebody already in this DM/);
   // Refusing didn't spend Ola's state: it still reads Kari.
   await says(add.state, ola, "still here");
+}
+
+{
+  // Every device of Kari's has been removed: members would refuse Kari's phone joining by itself,
+  // so it doesn't make that commit, and asks to be added instead.
+  const { ola } = await dm();
+  const out = await removeMlsMembers(ola, [kariLaptop.deviceId], SCOPE);
+  await assert.rejects(
+    joinMlsGroupExternally({ groupInfo: await mlsGroupInfoForJoining(out.state), device: kariPhone, trust }),
+    /a member has to add this one/,
+  );
 }
 
 {
@@ -104,5 +141,5 @@ async function says(from: MlsGroupState, to: MlsGroupState, body: string) {
 }
 
 console.log(
-  "mls-external-join: your own device joins from the GroupInfo, a lost one resyncs, nobody new gets in that way, and nothing is taken without the scope",
+  "mls-external-join: your own device joins from the GroupInfo, a lost one resyncs, nobody new gets in that way or tries to, and nothing is taken without the scope",
 );
