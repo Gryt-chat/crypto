@@ -22,6 +22,7 @@ import {
   mlsCiphersuite,
   type MlsDevice,
   type MlsGroupState,
+  mlsGroupInfoDeviceIds,
   mlsGroupInfoForJoining,
   mlsGroupMembers,
   type MlsTrust,
@@ -118,6 +119,14 @@ async function says(from: MlsGroupState, to: MlsGroupState, body: string) {
   await assert.rejects(processMlsMessage(add.state, perCommit, SCOPE), /somebody already in this DM/);
   // Refusing didn't spend Ola's state: it still reads Kari.
   await says(add.state, ola, "still here");
+}
+
+{
+  // Who's in a group, from its GroupInfo alone: what a device checks before rebuilding a DM.
+  const { ola } = await dm();
+  assert.deepEqual(new Set(mlsGroupInfoDeviceIds(await mlsGroupInfoForJoining(ola), SCOPE)), new Set([kariLaptop.deviceId, olaPhone.deviceId]));
+  const out = await removeMlsMembers(ola, [kariLaptop.deviceId], SCOPE);
+  assert.deepEqual(mlsGroupInfoDeviceIds(await mlsGroupInfoForJoining(out.state), SCOPE), [olaPhone.deviceId]);
 }
 
 {

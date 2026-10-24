@@ -365,6 +365,19 @@ export async function mlsGroupInfoForJoining(state: MlsGroupState): Promise<Uint
 }
 
 /**
+ * The device ids with a leaf in a GroupInfo's tree. Nothing is verified: it's for telling whether
+ * anybody is left to add this device, never for trusting anyone.
+ */
+export function mlsGroupInfoDeviceIds(groupInfo: Uint8Array, scope: IdentityScope): string[] {
+  const m = unwire(groupInfo);
+  if (m.wireformat !== "mls_group_info") throw new Error("That isn't a GroupInfo.");
+  return (ratchetTreeFromExtension(m.groupInfo) ?? []).flatMap((n) => {
+    const c = n?.nodeType === "leaf" ? deviceCertificateOf(n.leaf.credential, scope) : null;
+    return c ? [c.deviceId] : [];
+  });
+}
+
+/**
  * Joins from a GroupInfo with an external commit, as this device. If the tree still has this
  * device's leaf (it lost its state), the join replaces it. Send `commit` like any other.
  */
