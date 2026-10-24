@@ -9,6 +9,7 @@ import {
   type ClientState,
   type IncomingMessageCallback,
   type KeyPackage,
+  type LeafNode,
   type MLSMessage,
   type PrivateKeyPackage,
   type Proposal,
@@ -378,11 +379,15 @@ export async function joinMlsGroupExternally({
 }): Promise<{ state: MlsGroupState; commit: Uint8Array }> {
   const m = unwire(groupInfo);
   if (m.wireformat !== "mls_group_info") throw new Error("That isn't a GroupInfo.");
+  const leaves = (ratchetTreeFromExtension(m.groupInfo) ?? []).flatMap((n) => (n?.nodeType === "leaf" ? [n.leaf] : []));
+  // Members refuse a join by a person with no leaf left, and once the server has it nobody gets past it.
+  const mine = deviceCertificateOf({ credentialType: "basic", identity: device.certificate }, trust.scope);
+  if (!mine || !leaves.some((l) => personOfLeaf(l, trust.scope) === personOf(mine))) {
+    throw new Error("None of your devices is in this DM any more, so a member has to add this one.");
+  }
   const own = await generateMlsKeyPackage(device);
   // ts-mls finds the old leaf by signature key the same way, and breaks if it isn't there.
-  const resync = (ratchetTreeFromExtension(m.groupInfo) ?? []).some(
-    (node) => node?.nodeType === "leaf" && base64Url(node.leaf.signaturePublicKey) === base64Url(device.publicKey),
-  );
+  const resync = leaves.some((l) => base64Url(l.signaturePublicKey) === base64Url(device.publicKey));
   const r = await joinGroupExternal(
     m.groupInfo,
     keyPackageOf(own.keyPackage),
@@ -396,6 +401,10 @@ export async function joinMlsGroupExternally({
 }
 
 const personOf = (c: DeviceCertificate) => base64Url(c.personPublicKey);
+const personOfLeaf = (l: LeafNode, scope: IdentityScope) => {
+  const c = deviceCertificateOf(l.credential, scope);
+  return c ? personOf(c) : null;
+};
 /** Every leaf with the person it belongs to, keyed by its encryption key, which a rejoin always renews. */
 function leavesOf(state: MlsGroupState, scope: IdentityScope): Map<string, string> {
   const out = new Map<string, string>();
