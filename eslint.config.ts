@@ -29,6 +29,7 @@ export default tseslint.config(
   {
     files: [
       "src/dm-key-binding.ts",
+      "src/key-handover.ts",
       "src/mls-person-key.ts",
     ],
     rules: { "@typescript-eslint/no-restricted-types": "off" },
