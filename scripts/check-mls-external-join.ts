@@ -95,9 +95,9 @@ async function says(from: MlsGroupState, to: MlsGroupState, body: string) {
 }
 
 {
-  // Kari's laptop lost its state: it resyncs into the group, replacing its own old leaf.
+  // Kari's laptop lost its state: joining again replaces its own old leaf, without being told to.
   let { ola } = await dm();
-  const back = await joinMlsGroupExternally({ groupInfo: await mlsGroupInfoForJoining(ola), device: kariLaptop, trust, resync: true });
+  const back = await joinMlsGroupExternally({ groupInfo: await mlsGroupInfoForJoining(ola), device: kariLaptop, trust });
   ola = (await processMlsMessage(ola, back.commit, SCOPE)).state;
   assert.equal(mlsGroupMembers(ola, SCOPE).length, 2, "the old leaf went, the new one came");
   await says(ola, back.state, "velkommen tilbake");

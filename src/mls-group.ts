@@ -32,6 +32,7 @@ import {
   processMessage,
   zeroOutUint8Array,
 } from "ts-mls";
+import { ratchetTreeFromExtension } from "ts-mls/groupInfo.js";
 import { makeKeyPackageRef, verifyKeyPackage } from "ts-mls/keyPackage.js";
 
 import { base64Url } from "./base64";
@@ -363,23 +364,25 @@ export async function mlsGroupInfoForJoining(state: MlsGroupState): Promise<Uint
 }
 
 /**
- * Joins from a GroupInfo with an external commit, as this device. `resync` replaces this device's
- * own old leaf, for a device that lost its state. Send `commit` like any other.
+ * Joins from a GroupInfo with an external commit, as this device. If the tree still has this
+ * device's leaf (it lost its state), the join replaces it. Send `commit` like any other.
  */
 export async function joinMlsGroupExternally({
   groupInfo,
   device,
   trust,
-  resync = false,
 }: {
   groupInfo: Uint8Array;
   device: MlsDevice;
   trust: MlsTrust;
-  resync?: boolean;
 }): Promise<{ state: MlsGroupState; commit: Uint8Array }> {
   const m = unwire(groupInfo);
   if (m.wireformat !== "mls_group_info") throw new Error("That isn't a GroupInfo.");
   const own = await generateMlsKeyPackage(device);
+  // ts-mls finds the old leaf by signature key the same way, and breaks if it isn't there.
+  const resync = (ratchetTreeFromExtension(m.groupInfo) ?? []).some(
+    (node) => node?.nodeType === "leaf" && base64Url(node.leaf.signaturePublicKey) === base64Url(device.publicKey),
+  );
   const r = await joinGroupExternal(
     m.groupInfo,
     keyPackageOf(own.keyPackage),
