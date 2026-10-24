@@ -33,7 +33,6 @@ const MODULES = [
   "dm-keys",
   "history-chunks",
   "identity-backup",
-  "identity-vault",
   "member-keys",
   "message-keys",
   "mls-authentication",
@@ -45,11 +44,9 @@ const MODULES = [
   "pairing-emoji",
   "peer-keys",
   "pairing-envelope",
-  "recovery-key",
   "scope",
   "seed-words",
   "thumbprint",
-  "vault-password",
 ];
 
 const barrel = await import("../dist/index.js");
