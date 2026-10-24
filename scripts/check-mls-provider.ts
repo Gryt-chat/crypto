@@ -151,9 +151,11 @@ const { hpke, signature, hash, kdf } = cs;
 
 {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-  const pinned = pkg.dependencies["ts-mls"];
-  assert.match(pinned, /^\d+\.\d+\.\d+$/, "ts-mls has to be pinned exactly, since mixed versions reject each other's commits");
-  const [major, minor, patch] = pinned.split(".").map(Number);
+  // Exact, or our fork's exact version through an alias (GRYT-1866): 1.6.4 plus one backported fix.
+  const spec: string = pkg.dependencies["ts-mls"];
+  const pinned = spec.replace(/^npm:@gryt\/ts-mls@/, "");
+  assert.match(pinned, /^\d+\.\d+\.\d+(-gryt\.\d+)?$/, "ts-mls has to be pinned exactly, since mixed versions reject each other's commits");
+  const [major, minor, patch] = pinned.split("-")[0].split(".").map(Number);
   assert.ok(major > 1 || (major === 1 && (minor > 6 || (minor === 6 && patch >= 4))), "ts-mls below 1.6.4 lets a removed member read on");
   const installed = JSON.parse(readFileSync(new URL("../node_modules/ts-mls/package.json", import.meta.url), "utf8")).version;
   assert.equal(installed, pinned, "the installed ts-mls is not the pinned one");
