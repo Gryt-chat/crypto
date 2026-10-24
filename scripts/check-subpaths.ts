@@ -32,6 +32,7 @@ const MODULES = [
   "dm-key-binding",
   "dm-keys",
   "history-chunks",
+  "key-handover",
   "identity-backup",
   "member-keys",
   "message-keys",
