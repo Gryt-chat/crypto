@@ -223,7 +223,7 @@ const certificate = (over = {}) =>
 
 {
   const cs = await getCiphersuiteImpl(getCiphersuiteFromName(MLS_CIPHERSUITE), grytMlsCryptoProvider);
-  const people = { kari: derivePersonKeyPair(seed(11), SCOPE), ola: derivePersonKeyPair(seed(13), SCOPE), eve: derivePersonKeyPair(seed(17), SCOPE) };
+  const people = { kari: derivePersonKeyPair(seed(11), SCOPE), mia: derivePersonKeyPair(seed(13), SCOPE), eve: derivePersonKeyPair(seed(17), SCOPE) };
   const device = async (who: keyof typeof people, name: string) => {
     const leaf = generateDeviceSignatureKeyPair();
     const identityBytes = signDeviceCertificate({
@@ -235,7 +235,7 @@ const certificate = (over = {}) =>
     });
     return generateKeyPackageWithKey({ credentialType: "basic", identity: identityBytes }, defaultCapabilities(), defaultLifetime, [], leaf, cs);
   };
-  const trusted = new Set([hex(people.kari.publicKey), hex(people.ola.publicKey)]);
+  const trusted = new Set([hex(people.kari.publicKey), hex(people.mia.publicKey)]);
   const clientConfig = (trust: Set<string>): ClientConfig => ({
     keyRetentionConfig: { retainKeysForGenerations: 10, retainKeysForEpochs: 4, maximumForwardRatchetSteps: 200 },
     lifetimeConfig: { maximumTotalLifetime: 2628000n, validateLifetimeOnReceive: false },
@@ -249,7 +249,7 @@ const certificate = (over = {}) =>
   const add = (kp: { publicPackage: KeyPackage }): Proposal => ({ proposalType: "add", add: { keyPackage: kp.publicPackage } });
   const unwire = (m: MLSMessage) => decodeMlsMessage(encodeMlsMessage(m), 0)?.[0];
 
-  const [kariLaptop, olaPhone, evePhone] = await Promise.all([device("kari", "laptop"), device("ola", "phone"), device("eve", "phone")]);
+  const [kariLaptop, miaPhone, evePhone] = await Promise.all([device("kari", "laptop"), device("mia", "phone"), device("eve", "phone")]);
   let kari = await createGroup(new TextEncoder().encode("dm"), kariLaptop.publicPackage, kariLaptop.privatePackage, [], cs, clientConfig(trusted));
 
   await assert.rejects(
@@ -258,29 +258,29 @@ const certificate = (over = {}) =>
     "Kari's client committed an Add for somebody it doesn't trust",
   );
 
-  const added = await createCommit({ state: kari, cipherSuite: cs }, { extraProposals: [add(olaPhone)], ratchetTreeExtension: true });
+  const added = await createCommit({ state: kari, cipherSuite: cs }, { extraProposals: [add(miaPhone)], ratchetTreeExtension: true });
   kari = added.newState;
-  assert.ok(added.welcome, "adding Ola made no Welcome");
+  assert.ok(added.welcome, "adding Mia made no Welcome");
   const sent = unwire({ version: "mls10", wireformat: "mls_welcome", welcome: added.welcome });
   assert.ok(sent?.wireformat === "mls_welcome", "the Welcome didn't decode as one");
   const welcome = sent.welcome;
-  const ola = await joinGroup(welcome, olaPhone.publicPackage, olaPhone.privatePackage, emptyPskIndex, cs, undefined, undefined, clientConfig(trusted));
-  assert.ok(ola, "Ola couldn't join a group of people he trusts");
+  const mia = await joinGroup(welcome, miaPhone.publicPackage, miaPhone.privatePackage, emptyPskIndex, cs, undefined, undefined, clientConfig(trusted));
+  assert.ok(mia, "Mia couldn't join a group of people he trusts");
 
   // A client that doesn't trust Kari refuses the Welcome whose tree has her in it.
-  const onlyOla = new Set([hex(people.ola.publicKey)]);
+  const onlyMia = new Set([hex(people.mia.publicKey)]);
   await assert.rejects(
-    joinGroup(welcome, olaPhone.publicPackage, olaPhone.privatePackage, emptyPskIndex, cs, undefined, undefined, clientConfig(onlyOla)),
+    joinGroup(welcome, miaPhone.publicPackage, miaPhone.privatePackage, emptyPskIndex, cs, undefined, undefined, clientConfig(onlyMia)),
     /Could not validate credential/,
     "joined a group whose tree has an untrusted leaf in it",
   );
 
-  // Kari's client is lenient here; Ola's still refuses the commit that adds Eve.
+  // Kari's client is lenient here; Mia's still refuses the commit that adds Eve.
   const lenient = { ...kari, clientConfig: clientConfig(new Set([...trusted, hex(people.eve.publicKey)])) };
   const sneaky = await createCommit({ state: lenient, cipherSuite: cs }, { extraProposals: [add(evePhone)], ratchetTreeExtension: true });
   const wire = unwire(sneaky.commit);
   assert.ok(wire?.wireformat === "mls_public_message" || wire?.wireformat === "mls_private_message", "the commit didn't decode as a message");
-  await assert.rejects(processMessage(wire, ola, emptyPskIndex, acceptAll, cs), /Could not validate credential/, "Ola accepted a commit adding somebody he doesn't trust");
+  await assert.rejects(processMessage(wire, mia, emptyPskIndex, acceptAll, cs), /Could not validate credential/, "Mia accepted a commit adding somebody he doesn't trust");
 }
 
 console.log("mls-credentials: the person key and certificate bytes hold, bindings and certificates refuse tampering, and ts-mls asks before any leaf gets in");

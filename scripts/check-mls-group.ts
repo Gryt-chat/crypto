@@ -50,8 +50,8 @@ const read = (b: Uint8Array) => new TextDecoder().decode(b);
 const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
 
 const KARI = seed(3);
-const OLA = seed(5);
-const people = new Set([KARI, OLA].map((s) => hex(derivePersonKeyPair(s, SCOPE).publicKey)));
+const MIA = seed(5);
+const people = new Set([KARI, MIA].map((s) => hex(derivePersonKeyPair(s, SCOPE).publicKey)));
 const trust: MlsTrust = { scope: SCOPE, trustPersonKey: (c) => people.has(hex(c.personPublicKey)) };
 
 // Every step goes through bytes, the way a client that restarted would pick it up.
@@ -59,21 +59,21 @@ const reload = (state: MlsGroupState) => decodeMlsGroupState(encodeMlsGroupState
 
 const kariLaptop = createMlsDevice({ seed: KARI, scope: SCOPE, deviceName: "laptop" });
 const kariPhone = createMlsDevice({ seed: KARI, scope: SCOPE, deviceName: "phone" });
-const olaPhone = createMlsDevice({ seed: OLA, scope: SCOPE, deviceName: "phone" });
+const miaPhone = createMlsDevice({ seed: MIA, scope: SCOPE, deviceName: "phone" });
 
 /* ── KeyPackages: what the server checks on upload ─────────────────────── */
 
 const kpKariPhone = await generateMlsKeyPackage(kariPhone);
-const kpOla = await generateMlsKeyPackage(olaPhone);
+const kpMia = await generateMlsKeyPackage(miaPhone);
 {
-  const seen = await readMlsKeyPackage(kpOla.keyPackage, SCOPE);
-  assert.equal(seen.certificate.deviceId, olaPhone.deviceId);
-  assert.equal(seen.ref, kpOla.ref);
-  await assert.rejects(readMlsKeyPackage(kpOla.keyPackage, asIdentityScope("srv:other")), /no device certificate/);
-  const bad = kpOla.keyPackage.slice();
+  const seen = await readMlsKeyPackage(kpMia.keyPackage, SCOPE);
+  assert.equal(seen.certificate.deviceId, miaPhone.deviceId);
+  assert.equal(seen.ref, kpMia.ref);
+  await assert.rejects(readMlsKeyPackage(kpMia.keyPackage, asIdentityScope("srv:other")), /no device certificate/);
+  const bad = kpMia.keyPackage.slice();
   bad[bad.length - 3] ^= 1;
   await assert.rejects(readMlsKeyPackage(bad, SCOPE), "a KeyPackage with a broken signature was accepted");
-  await assert.rejects(readMlsKeyPackage(kpOla.keyPackage.slice(0, -1), SCOPE), /one whole MLS message/);
+  await assert.rejects(readMlsKeyPackage(kpMia.keyPackage.slice(0, -1), SCOPE), /one whole MLS message/);
 }
 
 /* ── KeyPackages last 30 days from an hour back, edges included ─────────── */
@@ -83,7 +83,7 @@ const kpOla = await generateMlsKeyPackage(olaPhone);
   const now = Math.floor(Date.now() / 1000);
   assert.equal(MLS_KEY_PACKAGE_LIFETIME, 30 * DAY);
 
-  const kp = await generateMlsKeyPackage(olaPhone, now);
+  const kp = await generateMlsKeyPackage(miaPhone, now);
   const from = now - MLS_KEY_PACKAGE_BACKDATE;
   const to = from + MLS_KEY_PACKAGE_LIFETIME;
   assert.equal(kp.expiresAt, to);
@@ -96,17 +96,17 @@ const kpOla = await generateMlsKeyPackage(olaPhone);
   assert.equal((await readMlsKeyPackage(kp.keyPackage, SCOPE, from)).expiresAt, to);
   assert.equal((await readMlsKeyPackage(kp.keyPackage, SCOPE, to)).expiresAt, to);
   await assert.rejects(readMlsKeyPackage(kp.keyPackage, SCOPE, to + 1), /expired/);
-  assert.equal((await readMlsKeyPackage(kpOla.keyPackage, SCOPE)).expiresAt > now + 29 * DAY, true);
+  assert.equal((await readMlsKeyPackage(kpMia.keyPackage, SCOPE)).expiresAt > now + 29 * DAY, true);
 
   // Lifetimes the engine never writes: ts-mls's own default runs to 2^63, and one runs backwards.
   const cs = await mlsCiphersuite();
   const custom = async (lt: typeof defaultLifetime) => {
     const { publicPackage } = await generateKeyPackageWithKey(
-      { credentialType: "basic", identity: olaPhone.certificate },
+      { credentialType: "basic", identity: miaPhone.certificate },
       { ...defaultCapabilities(), ciphersuites: [MLS_CIPHERSUITE] },
       lt,
       [],
-      { signKey: olaPhone.signKey, publicKey: olaPhone.publicKey },
+      { signKey: miaPhone.signKey, publicKey: miaPhone.publicKey },
       cs,
     );
     return encodeMlsMessage({ version: "mls10", wireformat: "mls_key_package", keyPackage: publicPackage });
@@ -120,7 +120,7 @@ const kpOla = await generateMlsKeyPackage(olaPhone);
 
   // Adding goes by this device's clock, which is also the one ts-mls checks against.
   const group = await createMlsGroup(kariLaptop, trust);
-  const at = async (offset: number) => (await generateMlsKeyPackage(olaPhone, now + offset)).keyPackage;
+  const at = async (offset: number) => (await generateMlsKeyPackage(miaPhone, now + offset)).keyPackage;
   await assert.rejects(addMlsMembers(group, [await at(-31 * DAY)]), /expired/);
   await assert.rejects(addMlsMembers(group, [await at(2 * 60 * 60)]), /isn't valid yet/);
   await assert.rejects(addMlsMembers(group, [kpKariPhone.keyPackage, forever]), /longer than 30 days/);
@@ -130,14 +130,14 @@ const kpOla = await generateMlsKeyPackage(olaPhone);
     assert.equal(mlsGroupInfo(ok.state).epoch, 1n, `a KeyPackage made ${offset} seconds from now wasn't added`);
   }
   assert.equal(mlsGroupInfo(group).epoch, 0n);
-  await assert.rejects(generateMlsKeyPackage(olaPhone, 1.5), /whole seconds/);
+  await assert.rejects(generateMlsKeyPackage(miaPhone, 1.5), /whole seconds/);
 }
 
-/* ── Kari's laptop starts the DM and adds Ola and her own phone ────────── */
+/* ── Kari's laptop starts the DM and adds Mia and her own phone ────────── */
 
 let laptop = await createMlsGroup(kariLaptop, trust);
-const added = await addMlsMembers(laptop, [kpOla.keyPackage, kpKariPhone.keyPackage]);
-assert.ok(added.welcome, "adding Ola and the phone made no Welcome");
+const added = await addMlsMembers(laptop, [kpMia.keyPackage, kpKariPhone.keyPackage]);
+assert.ok(added.welcome, "adding Mia and the phone made no Welcome");
 laptop = reload(added.state);
 forgetMlsSecrets(added.consumed);
 
@@ -148,14 +148,14 @@ forgetMlsSecrets(added.consumed);
     { wireformat: "mls_public_message", epoch: 0n, contentType: "commit", groupId: mlsGroupInfo(laptop).groupId },
     "the server can't read the epoch and type off a commit",
   );
-  assert.deepEqual(new Set(mlsWelcomeRefs(added.welcome)), new Set([kpOla.ref, kpKariPhone.ref]));
+  assert.deepEqual(new Set(mlsWelcomeRefs(added.welcome)), new Set([kpMia.ref, kpKariPhone.ref]));
 }
 
-let ola = reload(await joinMlsGroup(added.welcome, kpOla.keyPackage, kpOla.privatePackage, trust));
+let mia = reload(await joinMlsGroup(added.welcome, kpMia.keyPackage, kpMia.privatePackage, trust));
 let phone = reload(await joinMlsGroup(added.welcome, kpKariPhone.keyPackage, kpKariPhone.privatePackage, trust));
-assert.equal(mlsGroupInfo(ola).epoch, 1n);
+assert.equal(mlsGroupInfo(mia).epoch, 1n);
 assert.deepEqual(
-  mlsGroupMembers(ola, SCOPE).map((m) => m.certificate.deviceName).sort(),
+  mlsGroupMembers(mia, SCOPE).map((m) => m.certificate.deviceName).sort(),
   ["laptop", "phone", "phone"],
 );
 
@@ -176,10 +176,10 @@ async function send(from: MlsGroupState, to: MlsGroupState[], words: string) {
 }
 
 {
-  const a = await send(laptop, [ola, phone], "hei Ola");
-  [laptop, ola, phone] = [a.from, ...a.to];
-  const b = await send(ola, [laptop, phone], "hei Kari");
-  [ola, laptop, phone] = [b.from, ...b.to];
+  const a = await send(laptop, [mia, phone], "hei Mia");
+  [laptop, mia, phone] = [a.from, ...a.to];
+  const b = await send(mia, [laptop, phone], "hei Kari");
+  [mia, laptop, phone] = [b.from, ...b.to];
 
   // Text plus its length prefix, rounded up to 256: two lengths in one step look the same.
   const prefix = (n: number) => {
@@ -191,7 +191,7 @@ async function send(from: MlsGroupState, to: MlsGroupState[], words: string) {
   for (const n of [0, 1, 62, 63, 64, 200, 254, 255, 300, 510, 511, 16380, 16381, 16383, 16384, 16400]) {
     const out = await encryptMlsMessage(laptop, text("x".repeat(n)));
     laptop = out.state;
-    ola = (await decryptMlsMessage(ola, out.message)).state;
+    mia = (await decryptMlsMessage(mia, out.message)).state;
     const size = sizes.get(step(n));
     if (size !== undefined) assert.equal(out.message.length, size, `${n} bytes of text came out a different size from others in its step`);
     sizes.set(step(n), out.message.length);
@@ -209,59 +209,59 @@ async function send(from: MlsGroupState, to: MlsGroupState[], words: string) {
     { extraProposals: [{ proposalType: "group_context_extensions", groupContextExtensions: { extensions: [] } }], wireAsPublicMessage: true },
   );
   await assert.rejects(
-    processMlsMessage(ola, encodeMlsMessage(extensions.commit)),
+    processMlsMessage(mia, encodeMlsMessage(extensions.commit)),
     /isn't allowed in a DM/,
     "a DM took a commit that changes the group's extensions",
   );
 
-  const other = await createMlsGroup(olaPhone, trust);
+  const other = await createMlsGroup(miaPhone, trust);
   const stray = await encryptMlsMessage(other, text("wrong group"));
-  await assert.rejects(processMlsMessage(ola, stray.message), /another group/);
-  await assert.rejects(decryptMlsMessage(ola, added.commit), /application message/);
+  await assert.rejects(processMlsMessage(mia, stray.message), /another group/);
+  await assert.rejects(decryptMlsMessage(mia, added.commit), /application message/);
 }
 
 /* ── Kari removes her phone; the phone is out and knows it ─────────────── */
 
 {
   const removed = await removeMlsMembers(laptop, [kariPhone.deviceId], SCOPE);
-  const r1 = await processMlsMessage(ola, removed.commit);
+  const r1 = await processMlsMessage(mia, removed.commit);
   const r2 = await processMlsMessage(phone, removed.commit);
   assert.ok(r1.kind === "handshake" && r2.kind === "handshake", "a removal came back as an application message");
   assert.equal(r1.removed, false);
   assert.equal(r2.removed, true, "the phone doesn't know it was removed");
   laptop = reload(removed.state);
-  ola = reload(r1.state);
+  mia = reload(r1.state);
   phone = reload(r2.state);
   forgetMlsSecrets(removed.consumed);
 
   const after = await encryptMlsMessage(laptop, text("the phone can't read this"));
   laptop = after.state;
   await assert.rejects(decryptMlsMessage(phone, after.message), "a removed device read the next message");
-  ola = (await decryptMlsMessage(ola, after.message)).state;
-  assert.deepEqual(mlsGroupMembers(ola, SCOPE).map((m) => m.certificate.deviceId).sort(), [kariLaptop.deviceId, olaPhone.deviceId].sort());
+  mia = (await decryptMlsMessage(mia, after.message)).state;
+  assert.deepEqual(mlsGroupMembers(mia, SCOPE).map((m) => m.certificate.deviceId).sort(), [kariLaptop.deviceId, miaPhone.deviceId].sort());
   await assert.rejects(removeMlsMembers(laptop, [kariPhone.deviceId], SCOPE), /None of those devices/);
 }
 
 /* ── an update commit moves the epoch and both sides keep talking ──────── */
 
 {
-  const before = mlsGroupInfo(ola).epoch;
-  const update = await updateMlsLeaf(ola);
+  const before = mlsGroupInfo(mia).epoch;
+  const update = await updateMlsLeaf(mia);
   laptop = reload((await processMlsMessage(laptop, update.commit)).state);
-  ola = reload(update.state);
-  assert.equal(mlsGroupInfo(ola).epoch, before + 1n);
-  const m = await send(laptop, [ola], "after the update");
+  mia = reload(update.state);
+  assert.equal(mlsGroupInfo(mia).epoch, before + 1n);
+  const m = await send(laptop, [mia], "after the update");
   assert.equal(mlsGroupInfo(m.to[0]).epoch, mlsGroupInfo(m.from).epoch);
 }
 
 /* ── the state encoding refuses what isn't its own ────────────────────── */
 
 {
-  const bytes = encodeMlsGroupState(ola);
+  const bytes = encodeMlsGroupState(mia);
   assert.equal(bytes[0], 1);
   assert.throws(() => decodeMlsGroupState(Uint8Array.of(2, ...bytes.subarray(1)), trust), /format/);
   assert.throws(() => decodeMlsGroupState(new Uint8Array([...bytes, 0]), trust), /damaged/);
-  assert.equal(base64Url(decodeMlsGroupState(bytes, trust).groupContext.groupId), mlsGroupInfo(ola).groupId);
+  assert.equal(base64Url(decodeMlsGroupState(bytes, trust).groupContext.groupId), mlsGroupInfo(mia).groupId);
 }
 
 console.log("mls-group: a DM of three devices creates, adds, talks, removes and updates through saved state, pads, refuses what a DM shouldn't take, and only adds KeyPackages inside their 30 days");
