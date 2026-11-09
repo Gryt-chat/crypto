@@ -12,6 +12,7 @@ import { asIdentityScope, type IdentityScope } from "./scope";
 export const PAIRING_ENVELOPE_VERSION = 1;
 export const PAIRING_ENVELOPE_MAX_BYTES = 256 * 1024;
 const KEY_BYTES = 32;
+const TRANSFER = /^[A-Za-z0-9_-]{22,64}$/;
 
 /** Which Keycloak N signs in with, and which account it has to end up as. Absent for a guest. */
 export interface PairingAccount {
@@ -41,6 +42,9 @@ export interface PairingHistory {
   key: Uint8Array;
   /** The snapshot manifest, checked by the chunk format's own parser. */
   manifest: HistoryManifest;
+  /** Which of `servers` holds the chunks, and under what id (GRYT-2055). Absent from older senders. */
+  host?: string;
+  transfer?: string;
 }
 
 export interface PairingEnvelope {
@@ -176,6 +180,13 @@ export function decodePairingEnvelope(bytes: Uint8Array): PairingEnvelope {
       refuse("history");
     }
     envelope.history = { key: bytesOf(raw.history.key, KEY_BYTES, "history"), manifest };
+    const { host, transfer } = raw.history;
+    if (host !== undefined || transfer !== undefined) {
+      // Only a server handed over in this same envelope, so N never fetches from anywhere else.
+      if (!servers.some((s) => s.host === host) || typeof transfer !== "string" || !TRANSFER.test(transfer)) refuse("history");
+      envelope.history.host = host as string;
+      envelope.history.transfer = transfer;
+    }
   }
   return envelope;
 }
@@ -190,7 +201,11 @@ function serialize(envelope: PairingEnvelope): Uint8Array {
       account,
       servers,
       pins,
-      history: history && { key: base64Url(history.key), manifest: history.manifest },
+      history: history && {
+        key: base64Url(history.key),
+        manifest: history.manifest,
+        ...(history.host !== undefined ? { host: history.host, transfer: history.transfer } : {}),
+      },
       from,
     }),
   );
