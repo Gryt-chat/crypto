@@ -70,6 +70,11 @@ const raw = (overrides: object) => {
   assert.deepEqual({ ...back, seed: 0, history: 0 }, { ...FULL, seed: 0, history: 0 });
   assert.deepEqual(back.history.manifest, FULL.history.manifest);
 
+  const held = roundTrip({ ...FULL, history: { ...FULL.history, host: "chat.example", transfer: "T".repeat(26) } });
+  assert.equal(held.history?.host, "chat.example");
+  assert.equal(held.history?.transfer, "T".repeat(26));
+  assert.equal(roundTrip(FULL).history?.host, undefined, "an older sender's history has no server");
+
   const guest = roundTrip(GUEST);
   assert.equal(guest.account, undefined, "a guest has no account, and skips Keycloak");
   assert.equal(guest.history, undefined);
@@ -117,6 +122,14 @@ const raw = (overrides: object) => {
   refused({ history: { key: base64Url(seq(32, 1)) } }, /history/);
   refused({ history: { key: base64Url(seq(32, 1)), manifest: { v: 1, chunks: [{ id: "c1" }] } } }, /history/);
   refused({ from: undefined }, /from/);
+
+  // GRYT-2055: the history's server has to be one of the envelope's own, with a well-formed id.
+  const history = JSON.parse(new TextDecoder().decode(encodePairingEnvelope(FULL))).history;
+  const transfer = "T".repeat(26);
+  refused({ history: { ...history, host: "elsewhere.example", transfer } }, /history/);
+  refused({ history: { ...history, host: "chat.example" } }, /history/);
+  refused({ history: { ...history, host: "chat.example", transfer: "../x" } }, /history/);
+  refused({ history: { ...history, transfer } }, /history/);
 
   const proto = new TextDecoder().decode(raw({})).replace('"pins":{"srv:abc"', '"pins":{"__proto__"');
   assert.ok(proto.includes('"pins":{"__proto__"'));
