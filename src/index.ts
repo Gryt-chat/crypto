@@ -12,7 +12,6 @@ export * from "./conversation-encryption";
 export * from "./crockford";
 export * from "./device-name";
 export * from "./dm-key-binding";
-export * from "./key-handover";
 export * from "./dm-keys";
 export * from "./history-chunks";
 export * from "./identity-backup";
