@@ -29,6 +29,7 @@ const MODULES = [
   "comparison-code",
   "conversation-encryption",
   "crockford",
+  "device-name",
   "dm-key-binding",
   "dm-keys",
   "history-chunks",
