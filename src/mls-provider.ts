@@ -188,6 +188,56 @@ const hpke: Hpke = {
   nonceLength: N_N,
 };
 
+/** A platform's Ed25519 check, such as CryptoKit's. Null means it can't answer, and noble does. */
+export type Ed25519Verify = (publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array) => boolean | null;
+
+let platformVerify: Ed25519Verify | null = null;
+
+/** Noble's check costs ~14 ms on Hermes, and every MLS message needs one, so a phone hands it to the OS. */
+export function setMlsSignatureVerifier(verify: Ed25519Verify | null): void {
+  platformVerify = verify;
+}
+
+const ED25519_L = (1n << 252n) + 27742317777372353535851937790883648493n;
+const strictKeys = new Map<string, boolean>();
+
+/** What strict RFC 8032 asks of a key beyond the equation: canonical and not small order. A sender has few keys, so it's cached. */
+function strictKey(publicKey: Uint8Array): boolean {
+  const id = String.fromCharCode(...publicKey);
+  let ok = strictKeys.get(id);
+  if (ok === undefined) {
+    try {
+      ok = !ed25519.Point.fromBytes(publicKey, false).isSmallOrder();
+    } catch {
+      ok = false;
+    }
+    if (strictKeys.size >= 256) strictKeys.clear();
+    strictKeys.set(id, ok);
+  }
+  return ok;
+}
+
+function canonicalS(signature: Uint8Array): boolean {
+  let s = 0n;
+  for (let i = 63; i >= 32; i--) s = (s << 8n) | BigInt(signature[i]);
+  return s < ED25519_L;
+}
+
+/**
+ * A platform "valid" is cofactorless, which noble's cofactored check also passes, so it's trusted once
+ * the key and S are strict. A platform "invalid" goes to noble, so every client still agrees.
+ */
+function platformSaysValid(publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array): boolean {
+  return (
+    platformVerify !== null &&
+    publicKey.length === 32 &&
+    signature.length === 64 &&
+    canonicalS(signature) &&
+    strictKey(publicKey) &&
+    platformVerify(publicKey, message, signature) === true
+  );
+}
+
 const suite1: Omit<CiphersuiteImpl, "name"> = {
   kdf: {
     extract: async (salt, ikm) => hkdfExtract(sha256, ikm, salt),
@@ -204,6 +254,7 @@ const suite1: Omit<CiphersuiteImpl, "name"> = {
     // Strict RFC 8032, as WebCrypto does it; every client has to agree. Bad lengths are a no.
     verify: async (pub, message, signature) => {
       try {
+        if (platformSaysValid(pub, message, signature)) return true;
         return ed25519.verify(signature, message, pub, { zip215: false });
       } catch {
         return false;

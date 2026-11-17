@@ -12,7 +12,9 @@ Object.defineProperty(globalThis.crypto, "subtle", { value: undefined });
 const {
   MLS_CIPHERSUITE,
   grytMlsCryptoProvider,
+  setMlsSignatureVerifier,
 } = await import("../dist/index.js");
+const { ed25519 } = await import("@noble/curves/ed25519.js");
 const {
   createApplicationMessage,
   createCommit,
@@ -130,6 +132,18 @@ const { hpke, signature, hash, kdf } = cs;
   assert.equal(await signature.verify(identity, enc.encode("anything"), forged), false, "verification is not strict RFC 8032");
   assert.equal(await signature.verify(pk, new Uint8Array(), new Uint8Array(3)), false, "a short signature threw or verified");
   assert.equal(await signature.verify(pk.slice(1), new Uint8Array(), unhex(sig)), false, "a short key threw or verified");
+
+  // A lax platform verifier (ZIP215 takes the identity forgery) still can't loosen what MLS accepts.
+  let asked = 0;
+  setMlsSignatureVerifier((key: Uint8Array, msg: Uint8Array, sg: Uint8Array) => (asked++, ed25519.verify(sg, msg, key, { zip215: true })));
+  assert.equal(await signature.verify(pk, new Uint8Array(), unhex(sig)), true);
+  assert.equal(asked, 1, "the platform verifier wasn't asked");
+  assert.equal(await signature.verify(pk, enc.encode("x"), unhex(sig)), false);
+  assert.equal(await signature.verify(pk, new Uint8Array(), malleable), false, "a non-canonical S got past the platform check");
+  assert.equal(await signature.verify(identity, enc.encode("anything"), forged), false, "a small-order key got past the platform check");
+  setMlsSignatureVerifier(() => null);
+  assert.equal(await signature.verify(pk, new Uint8Array(), unhex(sig)), true, "a platform that can't answer didn't fall back");
+  setMlsSignatureVerifier(null);
 }
 
 /* ── RFC 4231 test case 2, and the MAC check ───────────────────────────── */
