@@ -18,6 +18,7 @@ import {
   generateDeviceSignatureKeyPair,
   grytMlsCryptoProvider,
   readDeviceCertificate,
+  setMlsSignatureVerifier,
   signDeviceCertificate,
   signDmKeyBinding,
   signPersonKeyBinding,
@@ -182,6 +183,16 @@ const certificate = (over = {}) =>
   assert.throws(() => certificate({ deviceName: "" }), /device name/);
   assert.throws(() => certificate({ deviceId: "short" }), /device id/);
   assert.equal(readDeviceCertificate(certificate({ deviceId: generateDeviceId() }), SCOPE).scope, SCOPE);
+
+  // The platform check is asked first, and a "no" from it still goes to noble.
+  let asked = 0;
+  setMlsSignatureVerifier(() => (asked++, false));
+  assert.equal(readDeviceCertificate(bytes, SCOPE).deviceName, "Kari’s phone");
+  const flipped = bytes.slice();
+  flipped[flipped.length - 1] ^= 0x01;
+  assert.throws(() => readDeviceCertificate(flipped, SCOPE), /does not check out/);
+  setMlsSignatureVerifier(null);
+  assert.ok(asked >= 1, "the platform verifier wasn't asked");
 }
 
 /* ── the AuthenticationService on its own ─────────────────────────────── */

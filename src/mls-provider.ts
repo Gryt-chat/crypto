@@ -238,6 +238,12 @@ function platformSaysValid(publicKey: Uint8Array, message: Uint8Array, signature
   );
 }
 
+/** Strict RFC 8032, through the platform when it can say "valid". Throws on a malformed key, like noble. */
+export function ed25519Valid(publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array): boolean {
+  if (platformSaysValid(publicKey, message, signature)) return true;
+  return ed25519.verify(signature, message, publicKey, { zip215: false });
+}
+
 const suite1: Omit<CiphersuiteImpl, "name"> = {
   kdf: {
     extract: async (salt, ikm) => hkdfExtract(sha256, ikm, salt),
@@ -254,8 +260,7 @@ const suite1: Omit<CiphersuiteImpl, "name"> = {
     // Strict RFC 8032, as WebCrypto does it; every client has to agree. Bad lengths are a no.
     verify: async (pub, message, signature) => {
       try {
-        if (platformSaysValid(pub, message, signature)) return true;
-        return ed25519.verify(signature, message, pub, { zip215: false });
+        return ed25519Valid(pub, message, signature);
       } catch {
         return false;
       }
