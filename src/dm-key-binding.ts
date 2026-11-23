@@ -30,6 +30,26 @@ export interface VerifiedDmKeyBinding {
   signedAt: number;
 }
 
+/** A platform's ES256 check over the raw message, such as CryptoKit's. Null means it can't answer, and noble does. */
+export type P256Verify = (publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array) => boolean | null;
+
+let platformP256: P256Verify | null = null;
+
+/** Noble's p256 check costs ~25 ms on Hermes and every member's two bindings need one, so a phone hands it to the OS. */
+export function setBindingSignatureVerifier(verify: P256Verify | null): void {
+  platformP256 = verify;
+}
+
+/**
+ * ES256 over `message`, with `r || s` raw and high `s` allowed. A platform "valid" is the same check;
+ * a platform "invalid" goes to noble, so every client still accepts the same set.
+ */
+export function es256Valid(publicKey: Uint8Array, message: Uint8Array, signature: Uint8Array): boolean {
+  if (platformP256?.(publicKey, message, signature) === true) return true;
+  // Noble refuses high `s` by default; about half of honest ES256 signatures have one.
+  return p256.verify(signature, sha256(message), publicKey, { prehash: false, lowS: false });
+}
+
 /** A JWK's public point as `0x04 || x || y`, which the curve library takes. */
 function jwkToPoint(jwk: Record<string, unknown>): Uint8Array<ArrayBuffer> {
   if (jwk.kty !== "EC" || jwk.crv !== "P-256") {
@@ -166,16 +186,7 @@ export async function verifyDmKeyBinding(
     throw new Error("A DM key binding's signature is 64 bytes.");
   }
 
-  /*
-   * `lowS: false` is not a relaxation. Noble refuses high-`s` by default for blockchain
-   * reasons; about half of all ES256 signatures are high, so the default rejects half.
-   */
-  const ok = p256.verify(
-    signature,
-    sha256(utf8(`${parts[0]}.${parts[1]}`)),
-    publicKey,
-    { prehash: false, lowS: false },
-  );
+  const ok = es256Valid(publicKey, utf8(`${parts[0]}.${parts[1]}`), signature);
   if (!ok) {
     throw new Error("That DM key binding's signature does not check out.");
   }

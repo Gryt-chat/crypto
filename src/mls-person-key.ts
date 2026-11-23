@@ -4,11 +4,11 @@
  */
 
 import { ed25519 } from "@noble/curves/ed25519.js";
-import { p256 } from "@noble/curves/nist.js";
 import { hkdf } from "@noble/hashes/hkdf.js";
 import { sha256 } from "@noble/hashes/sha2.js";
 
 import { base64Url, base64UrlDecode } from "./base64";
+import { es256Valid } from "./dm-key-binding";
 import { asIdentityScope, type IdentityScope } from "./scope";
 import { assertUsableSeed } from "./seed-words";
 import { jwkThumbprint } from "./thumbprint";
@@ -123,11 +123,7 @@ export async function verifyPersonKeyBinding(
   point.set(x, 1);
   point.set(y, 33);
 
-  // `lowS: false` because about half of honest ES256 signatures have a high s.
-  const ok = p256.verify(signature, sha256(utf8(`${parts[0]}.${parts[1]}`)), point, {
-    prehash: false,
-    lowS: false,
-  });
+  const ok = es256Valid(point, utf8(`${parts[0]}.${parts[1]}`), signature);
   if (!ok) throw new Error("That person key binding's signature does not check out.");
 
   const personPublicKey = base64UrlDecode(payload.person);

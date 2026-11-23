@@ -10,6 +10,7 @@ import {
   deriveDmKeyPair,
 } from "../dist/index.js";
 import {
+  setBindingSignatureVerifier,
   signDmKeyBinding,
   verifyDmKeyBinding,
 } from "../dist/index.js";
@@ -149,6 +150,28 @@ const encode = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url
     /issued by/,
     "a JWT from another path was read as a DM key binding",
   );
+}
+
+/* ── a platform verifier is asked first, and its "no" goes to noble ───────── */
+
+{
+  const binding = await sign();
+  const [h, p, sg] = parts(binding);
+  const forged = `${h}.${encode({ ...decode(p), dm: Buffer.from(new Uint8Array(32).fill(9)).toString("base64url") })}.${sg}`;
+  let asked = 0;
+
+  for (const answer of [false, null]) {
+    setBindingSignatureVerifier(() => (asked++, answer));
+    await verifyDmKeyBinding(binding, SCOPE);
+    await assert.rejects(verifyDmKeyBinding(forged, SCOPE), /does not check out/,
+      `a platform answering ${answer} let a forged binding through`);
+  }
+  assert.equal(asked, 4, "the platform verifier wasn't asked");
+
+  setBindingSignatureVerifier((key, msg, sig) => (asked++, key.length === 65 && msg.length > 0 && sig.length === 64));
+  assert.equal(hex((await verifyDmKeyBinding(binding, SCOPE)).dmPublicKey), hex(aliceDm.publicKey));
+  assert.equal(asked, 5, "a platform 'valid' was not what decided");
+  setBindingSignatureVerifier(null);
 }
 
 /* ── shapes that are not a binding at all ───────────────────────────────── */
