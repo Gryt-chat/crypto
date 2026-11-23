@@ -7,6 +7,7 @@ import { ed25519 } from "@noble/curves/ed25519.js";
 import { randomBytes } from "@noble/hashes/utils.js";
 
 import { base64Url, base64UrlDecode } from "./base64";
+import { ed25519Valid } from "./mls-provider";
 import { asIdentityScope, type IdentityScope } from "./scope";
 
 /** Signed ahead of the body, so these bytes can't pass as any other Ed25519 statement. */
@@ -149,7 +150,7 @@ export function readDeviceCertificate(bytes: Uint8Array, expectedScope: Identity
   const signed = concat(utf8(SIGNATURE_CONTEXT), bytes.subarray(0, bodyLength));
   let ok = false;
   try {
-    ok = ed25519.verify(signature, signed, personPublicKey, { zip215: false });
+    ok = ed25519Valid(personPublicKey, signed, signature);
   } catch {
     ok = false;
   }
