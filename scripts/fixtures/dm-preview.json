@@ -1,0 +1,12 @@
+{
+  "deviceId": "dev-123",
+  "preview": {
+    "t": "Pingy",
+    "b": "Hei! Er du der? æøå 👋"
+  },
+  "recipientPrivateKey": "CChIaIioyOgNLU1tja3N7RIyUnKSstLyFzdXd5e31_c",
+  "ephemeralPrivateKey": "BydHZ4enx-cMLExsjKzM7BExUXGRsdHxFjZWdpa21vY",
+  "nonce": "BxMfKzdDT1tnc3-L",
+  "recipientPublicKey": "AgTVgllgGj6pHf3L0Jz1IXJNTltGuXL-rVOdTN6YlVw",
+  "blob": "AhHNPEii2zn-Cr97LMUVhHHp4FP2n2Qp56HWPmznA712BxMfKzdDT1tnc3-LvJ7xKDzcmUCHbgRHRG6F8vjZJAURbvqGzuwER7qF4LOn3hpW2IkVOj31ycXSNQozxJcGfmCwOe-qqOAM35RC"
+}
