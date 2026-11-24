@@ -13,6 +13,7 @@ export * from "./crockford";
 export * from "./device-name";
 export * from "./dm-key-binding";
 export * from "./dm-keys";
+export * from "./dm-preview";
 export * from "./history-chunks";
 export * from "./identity-backup";
 export * from "./member-keys";

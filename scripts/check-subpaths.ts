@@ -32,6 +32,7 @@ const MODULES = [
   "device-name",
   "dm-key-binding",
   "dm-keys",
+  "dm-preview",
   "history-chunks",
   "identity-backup",
   "member-keys",
