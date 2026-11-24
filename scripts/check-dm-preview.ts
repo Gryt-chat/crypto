@@ -29,8 +29,8 @@ assert.equal(openDmPreview(recipientPrivate, vector.deviceId, base64Url(flipped)
 assert.equal(openDmPreview(recipientPrivate, vector.deviceId, "AA"), null);
 
 const mine = generateDmPreviewKeyPair();
-const round = sealDmPreview(mine.publicKey, "d1", { t: "Pingy", b: "æøå 👋" });
-assert.deepEqual(openDmPreview(mine.privateKey, "d1", round), { t: "Pingy", b: "æøå 👋" });
+const round = sealDmPreview(mine.publicKey, "d1", { t: "Pingy", b: "æøå 👋", o: "dm_abc", m: "m-1" });
+assert.deepEqual(openDmPreview(mine.privateKey, "d1", round), { t: "Pingy", b: "æøå 👋", o: "dm_abc", m: "m-1" }, "where a tap lands comes along");
 assert.notEqual(sealDmPreview(mine.publicKey, "d1", { t: "a", b: "b" }), sealDmPreview(mine.publicKey, "d1", { t: "a", b: "b" }), "fresh each time");
 
 const device = generateDeviceSignatureKeyPair();

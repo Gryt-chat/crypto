@@ -12,10 +12,13 @@ const VERSION = 2;
 const INFO = "gryt-dm-preview-1";
 const KEY_STATEMENT = "gryt-dm-preview-key-1";
 
-/** What the notification shows: who, and the first line. */
+/** What the notification shows: who and the first line, and where a tap lands. */
 export interface DmPreview {
   t: string;
   b: string;
+  /** The conversation, so tapping opens it. */
+  o?: string;
+  m?: string;
 }
 
 const utf8 = (s: string) => new TextEncoder().encode(s);
@@ -61,7 +64,8 @@ export function openDmPreview(privateKey: Uint8Array, deviceId: string, blob: st
     const key = sealKey(x25519.getSharedSecret(privateKey, ephemeral), ephemeral, x25519.getPublicKey(privateKey));
     const plain = gcm(key, raw.subarray(33, 45), utf8(`${INFO}|${deviceId}`)).decrypt(raw.subarray(45));
     const p = JSON.parse(new TextDecoder().decode(plain)) as Partial<DmPreview>;
-    return typeof p.t === "string" && typeof p.b === "string" ? { t: p.t, b: p.b } : null;
+    if (typeof p.t !== "string" || typeof p.b !== "string") return null;
+    return { t: p.t, b: p.b, ...(typeof p.o === "string" ? { o: p.o } : {}), ...(typeof p.m === "string" ? { m: p.m } : {}) };
   } catch {
     return null;
   }
